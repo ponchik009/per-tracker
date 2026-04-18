@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.skipKeyboard = exports.yesNoKeyboard = exports.sexKeyboard = exports.backKeyboard = exports.BACK_TEXT = void 0;
+const telegraf_1 = require("telegraf");
+exports.BACK_TEXT = "⬅️ Назад";
+const backKeyboard = () => telegraf_1.Markup.keyboard([[exports.BACK_TEXT]]).resize();
+exports.backKeyboard = backKeyboard;
+const sexKeyboard = () => telegraf_1.Markup.keyboard([["Девочка", "Мальчик"], [exports.BACK_TEXT]]).resize();
+exports.sexKeyboard = sexKeyboard;
+const yesNoKeyboard = () => telegraf_1.Markup.keyboard([["Да", "Нет"], [exports.BACK_TEXT]]).resize();
+exports.yesNoKeyboard = yesNoKeyboard;
+const skipKeyboard = () => telegraf_1.Markup.keyboard([["Пропустить"]]).resize();
+exports.skipKeyboard = skipKeyboard;

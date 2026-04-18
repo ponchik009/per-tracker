@@ -1,0 +1,165 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PetSex {
+  FEMALE
+  MALE
+}
+
+enum PetEventKind {
+  PEE
+  POO
+  PLAY
+  SYMPTOM
+  CUSTOM
+  FEEDING
+}
+
+model User {
+  id                  String              @id @default(cuid())
+  telegramId          BigInt              @unique
+  username            String?
+  firstName           String?
+  timezone            String              @default("Europe/Moscow")
+  timezoneOffsetMin   Int                 @default(180)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  pets                PetAccess[]
+  sessions            UserSession[]
+  createdCustomEvents CustomEventType[]   @relation("customEventOwner")
+  notificationLogs    NotificationLog[]
+}
+
+model Pet {
+  id               String             @id @default(cuid())
+  name             String
+  breed            String
+  birthDate        DateTime
+  sex              PetSex
+  isSterilized     Boolean
+  currentWeightKg  Float
+  photoFileId      String
+  isDeleted        Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  owners           PetAccess[]
+  weightLogs       WeightLog[]
+  feedingConfig    FeedingConfig?
+  feedingLogs      FeedingLog[]
+  events           PetEvent[]
+  customEventTypes CustomEventType[]
+  notificationLogs NotificationLog[]
+}
+
+enum NotificationType {
+  FEEDING_DAILY_FALLBACK
+  FEEDING_SCHEDULE
+  WEIGHT_WEEKLY
+}
+
+model PetAccess {
+  id         String   @id @default(cuid())
+  userId     String
+  petId      String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, petId])
+}
+
+model WeightLog {
+  id         String   @id @default(cuid())
+  petId      String
+  weightKg   Float
+  createdAt  DateTime @default(now())
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+}
+
+model FeedingConfig {
+  id                    String            @id @default(cuid())
+  petId                 String            @unique
+  dryFoodDailyGrams     Float?
+  wetFoodDailyPacks     Float?
+  updatedAt             DateTime          @updatedAt
+  pet                   Pet               @relation(fields: [petId], references: [id], onDelete: Cascade)
+  scheduleItems         FeedingSchedule[]
+}
+
+model FeedingSchedule {
+  id              String         @id @default(cuid())
+  feedingConfigId String
+  feedType        String
+  amount          Float
+  minutesOfDay    Int
+  feedingConfig   FeedingConfig  @relation(fields: [feedingConfigId], references: [id], onDelete: Cascade)
+}
+
+model FeedingLog {
+  id                String    @id @default(cuid())
+  petId             String
+  feedingScheduleId String?
+  amount            Float?
+  feedType          String?
+  note              String?
+  createdAt         DateTime  @default(now())
+  pet               Pet       @relation(fields: [petId], references: [id], onDelete: Cascade)
+}
+
+model CustomEventType {
+  id            String       @id @default(cuid())
+  petId         String
+  label         String
+  createdById   String
+  createdAt     DateTime     @default(now())
+  pet           Pet          @relation(fields: [petId], references: [id], onDelete: Cascade)
+  createdBy     User         @relation("customEventOwner", fields: [createdById], references: [id], onDelete: Cascade)
+  events        PetEvent[]
+
+  @@unique([petId, label])
+}
+
+model PetEvent {
+  id                String          @id @default(cuid())
+  petId             String
+  kind              PetEventKind
+  customEventTypeId String?
+  comment           String?
+  createdAt         DateTime        @default(now())
+  pet               Pet             @relation(fields: [petId], references: [id], onDelete: Cascade)
+  customEventType   CustomEventType? @relation(fields: [customEventTypeId], references: [id], onDelete: SetNull)
+}
+
+model UserSession {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  flow            String?
+  step            String?
+  payload         Json?
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationLog {
+  id        String           @id @default(cuid())
+  userId    String
+  petId     String?
+  type      NotificationType
+  key       String
+  sentAt    DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pet       Pet?             @relation(fields: [petId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, type, key])
+}

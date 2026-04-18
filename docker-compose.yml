@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pet_tracker_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pet_user
+      POSTGRES_PASSWORD: pet_password
+      POSTGRES_DB: pet_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pet_user -d pet_tracker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

@@ -1,0 +1,93 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: pet-tracker-bot
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+      ghcr-image: ${{ steps.meta.outputs.ghcr-image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          echo "ghcr-image=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
+          echo "image-tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.ghcr-image }}:${{ steps.meta.outputs.image-tag }}
+            ${{ steps.meta.outputs.ghcr-image }}:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy deploy assets to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.prod.yml,deploy/vps-deploy.sh"
+          target: "~/pet-tracker"
+
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -eu
+            cd ~/pet-tracker
+            chmod +x deploy/vps-deploy.sh
+            printf '%s\n' "${{ secrets.PROD_ENV_FILE }}" > .env
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            export GHCR_IMAGE=${{ needs.build-and-push.outputs.ghcr-image }}
+            export IMAGE_TAG=${{ needs.build-and-push.outputs.image-tag }}
+            ./deploy/vps-deploy.sh
