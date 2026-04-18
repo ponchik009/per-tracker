@@ -1,21 +1,40 @@
 services:
+  bot:
+    image: ${GHCR_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: pet_tracker_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - pet_tracker_network
+    # Дополнительно: переопределяем переменную DATABASE_URL если её нет в .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+
   postgres:
     image: postgres:16-alpine
     container_name: pet_tracker_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: pet_user
-      POSTGRES_PASSWORD: pet_password
-      POSTGRES_DB: pet_tracker
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - pet_tracker_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pet_user -d pet_tracker"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+networks:
+  pet_tracker_network:
+    driver: bridge
 
 volumes:
   postgres_data:
