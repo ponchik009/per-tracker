@@ -545,7 +545,7 @@ export const createBot = () => {
               [
                 {
                   text: "🕒 Открыть расписание",
-                  callback_data: `nutrition_schedule:${payload.selectedPetId}`,
+                  callback_data: `nut_sch:${payload.selectedPetId}`,
                 },
               ],
             ],
@@ -589,17 +589,23 @@ export const createBot = () => {
       return;
     }
 
-    if (session.flow === "share" && session.step === "join_code") {
+    if (session.flow === "share" && session.step === "join_code") {     
+      if (text === "Пропустить") {
+        sendHome(user.telegramId, ctx.chat.id);
+      }
+
       const pet = await addPetAccessByCode(user.id, text);
       if (!pet || pet.isDeleted) {
         await ctx.reply("Код не найден.");
         return;
       }
+
       await clearSession(user.id);
       await ctx.reply(`Теперь ты тоже можешь вести ${pet.name} 🤝`);
       if (ctx.chat) {
         await sendHome(BigInt(ctx.from.id), ctx.chat.id);
       }
+
       return;
     }
 
@@ -884,7 +890,7 @@ export const createBot = () => {
               },
             ],
             [{ text: "⚖️ Вес", callback_data: `weight:${petId}` }],
-            [{ text: "🍽️ Питание", callback_data: `nutrition:${petId}` }],
+            [{ text: "🍽️ Питание", callback_data: `nut:${petId}` }],
             [{ text: "📋 События", callback_data: `events:${petId}` }],
             [{ text: "⬅️ Назад", callback_data: `pet:${petId}` }],
           ],
@@ -1045,7 +1051,7 @@ export const createBot = () => {
       return;
     }
 
-    if (data.startsWith("nutrition:")) {
+    if (data.startsWith("nut:")) {
       const petId = data.split(":")[1];
       await ctx.reply("Раздел питания:", {
         reply_markup: {
@@ -1053,13 +1059,13 @@ export const createBot = () => {
             [
               {
                 text: "✏️ Редактировать норму питания",
-                callback_data: `nutrition_norm:${petId}`,
+                callback_data: `nut_norm:${petId}`,
               },
             ],
             [
               {
                 text: "🕒 Редактировать расписание",
-                callback_data: `nutrition_schedule:${petId}`,
+                callback_data: `nut_sch:${petId}`,
               },
             ],
             [{ text: "⬅️ Назад", callback_data: `pet_info:${petId}` }],
@@ -1069,7 +1075,7 @@ export const createBot = () => {
       return;
     }
 
-    if (data.startsWith("nutrition_norm:")) {
+    if (data.startsWith("nut_norm:")) {
       const petId = data.split(":")[1];
       await upsertSession(user.id, "feeding_edit", "daily_dry", {
         selectedPetId: petId,
@@ -1078,13 +1084,13 @@ export const createBot = () => {
       return;
     }
 
-    if (data.startsWith("nutrition_schedule:")) {
+    if (data.startsWith("nut_sch:")) {
       const petId = data.split(":")[1];
       const config = await getFeedingConfigWithSchedule(petId);
       const scheduleButtons = (config?.scheduleItems ?? []).map((item) => [
         {
           text: `🗑️ ${formatMinutesToHHMM(item.minutesOfDay)} • ${item.amount} ${item.feedType === "WET" ? "пач" : "гр"}`,
-          callback_data: `nutrition_schedule_delete:${petId}:${item.id}`,
+          callback_data: `nut_sch_del:${petId}:${item.id}`,
         },
       ]);
       await ctx.reply(
@@ -1098,10 +1104,10 @@ export const createBot = () => {
               [
                 {
                   text: "➕ Добавить слот",
-                  callback_data: `nutrition_schedule_add:${petId}`,
+                  callback_data: `nut_sch_add:${petId}`,
                 },
               ],
-              [{ text: "⬅️ Назад", callback_data: `nutrition:${petId}` }],
+              [{ text: "⬅️ Назад", callback_data: `nut:${petId}` }],
             ],
           },
         },
@@ -1109,7 +1115,7 @@ export const createBot = () => {
       return;
     }
 
-    if (data.startsWith("nutrition_schedule_add:")) {
+    if (data.startsWith("nut_sch_add:")) {
       const petId = data.split(":")[1];
       await upsertSession(user.id, "feeding_schedule_add", "time", {
         selectedPetId: petId,
@@ -1118,7 +1124,7 @@ export const createBot = () => {
       return;
     }
 
-    if (data.startsWith("nutrition_schedule_delete:")) {
+    if (data.startsWith("nut_sch_del:")) {
       const [, petId, scheduleItemId] = data.split(":");
       await deleteScheduleItem(scheduleItemId);
       await ctx.reply("Слот удален ✅");
@@ -1130,7 +1136,7 @@ export const createBot = () => {
               [
                 {
                   text: "🕒 Открыть расписание",
-                  callback_data: `nutrition_schedule:${petId}`,
+                  callback_data: `nut_sch:${petId}`,
                 },
               ],
             ],
@@ -1162,7 +1168,7 @@ export const createBot = () => {
                 [
                   {
                     text: "🍽️ Перейти в питание",
-                    callback_data: `nutrition:${petId}`,
+                    callback_data: `nut:${petId}`,
                   },
                 ],
               ],
