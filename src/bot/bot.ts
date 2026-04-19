@@ -4,7 +4,11 @@ import dayjs from "dayjs";
 
 import { config } from "../config";
 import { prisma } from "../prisma";
-import { createPetEvent, getTodayEventSummary, upsertCustomEventType } from "../modules/events/event.service";
+import {
+  createPetEvent,
+  getTodayEventSummary,
+  upsertCustomEventType,
+} from "../modules/events/event.service";
 import {
   addScheduleItem,
   deleteScheduleItem,
@@ -25,8 +29,16 @@ import {
   updatePetSex,
   updatePetSterilization,
 } from "../modules/pets/pet.service";
-import { clearSession, upsertSession } from "../modules/sessions/session.service";
-import { getUserWithPets, getUserWithSession, getOrCreateUser } from "../modules/users/user.service";
+import {
+  clearSession,
+  upsertSession,
+} from "../modules/sessions/session.service";
+import {
+  getUserWithPets,
+  getUserWithSession,
+  getOrCreateUser,
+  isUserExists,
+} from "../modules/users/user.service";
 import { buildEventsReport, buildWeightReport } from "../services/reports";
 import {
   BACK_TEXT,
@@ -62,8 +74,9 @@ type SessionPayload = {
   editField?: "name" | "breed" | "birth_date" | "sex" | "sterilized";
 };
 
-const toPayload = (value: Prisma.JsonValue | null | undefined): SessionPayload =>
-  (value ?? {}) as SessionPayload;
+const toPayload = (
+  value: Prisma.JsonValue | null | undefined,
+): SessionPayload => (value ?? {}) as SessionPayload;
 
 const eventLabels: Record<PetEventKind, string> = {
   PEE: "Пописала",
@@ -99,12 +112,18 @@ export const createBot = () => {
 
   const sendHome = async (telegramId: bigint, chatId: number) => {
     const pets = await listActivePetsByTelegramId(telegramId);
-    const buttons = pets.map((pet) => [{ text: `🐾 ${pet.name}`, callback_data: `pet:${pet.id}` }]);
+    const buttons = pets.map((pet) => [
+      { text: `🐾 ${pet.name}`, callback_data: `pet:${pet.id}` },
+    ]);
     buttons.push([{ text: "➕ Добавить питомца", callback_data: "pet:add" }]);
-    buttons.push([{ text: "🤝 Поделиться информацией", callback_data: "share:open" }]);
+    buttons.push([
+      { text: "🤝 Поделиться информацией", callback_data: "share:open" },
+    ]);
     await bot.telegram.sendMessage(
       chatId,
-      pets.length ? "Выбери питомца из списка 👇" : "Питомцев пока нет. Добавим первого? 🐱",
+      pets.length
+        ? "Выбери питомца из списка 👇"
+        : "Питомцев пока нет. Добавим первого? 🐱",
       { reply_markup: { inline_keyboard: buttons } },
     );
   };
@@ -113,64 +132,116 @@ export const createBot = () => {
     if (!ctx.from) {
       return;
     }
+
+    const tgId = BigInt(ctx.from.id);
+    const userExists = await isUserExists(tgId);
     const user = await getOrCreateUser({
-      telegramId: BigInt(ctx.from.id),
+      telegramId: tgId,
       username: ctx.from.username ?? undefined,
       firstName: ctx.from.first_name ?? undefined,
     });
-    await clearSession(user.id);
-    await ctx.reply("Привет! Я помогу отслеживать питание, туалет и другие события кошки 🐾");
-    await ctx.reply(
-      "Если у тебя есть код для совместного доступа, отправь его сейчас. Или нажми «Пропустить».",
-      skipKeyboard(),
-    );
-    await upsertSession(user.id, "onboarding", "ask_ref", {});
+
+    if (userExists) {
+      await clearSession(user.id);
+      await ctx.reply(
+        "Привет! Я помогу отслеживать питание, туалет и другие события кошки 🐾",
+      );
+      await ctx.reply(
+        "Если у тебя есть код для совместного доступа, отправь его сейчас. Или нажми «Пропустить».",
+        skipKeyboard(),
+      );
+      await upsertSession(user.id, "onboarding", "ask_ref", {});
+    } else {
+      sendHome(tgId, ctx.chat.id);
+    }
   });
 
   bot.on("text", async (ctx, next) => {
     if (!ctx.from) {
       return next();
     }
+
     const user = await getUserWithSession(BigInt(ctx.from.id));
     if (!user) {
       return next();
     }
+
     const session = user.sessions[0];
     const text = ctx.message.text.trim();
     if (!session?.flow) {
       return next();
     }
+
     const payload = toPayload(session.payload);
 
     if (text === BACK_TEXT) {
       if (session.flow === "pet_create") {
         if (session.step === "breed") {
-          await upsertSession(user.id, "pet_create", "name", payload as Prisma.JsonObject);
+          await upsertSession(
+            user.id,
+            "pet_create",
+            "name",
+            payload as Prisma.JsonObject,
+          );
           await ctx.reply("Как зовут твою кошку? 😺", backKeyboard());
           return;
         }
         if (session.step === "birth_date") {
-          await upsertSession(user.id, "pet_create", "breed", payload as Prisma.JsonObject);
-          await ctx.reply("Какая у неё порода? Можно написать в свободной форме.", backKeyboard());
+          await upsertSession(
+            user.id,
+            "pet_create",
+            "breed",
+            payload as Prisma.JsonObject,
+          );
+          await ctx.reply(
+            "Какая у неё порода? Можно написать в свободной форме.",
+            backKeyboard(),
+          );
           return;
         }
         if (session.step === "weight") {
-          await upsertSession(user.id, "pet_create", "birth_date", payload as Prisma.JsonObject);
-          await ctx.reply("Дата рождения в формате ДД.ММ.ГГГГ 📅", backKeyboard());
+          await upsertSession(
+            user.id,
+            "pet_create",
+            "birth_date",
+            payload as Prisma.JsonObject,
+          );
+          await ctx.reply(
+            "Дата рождения в формате ДД.ММ.ГГГГ 📅",
+            backKeyboard(),
+          );
           return;
         }
         if (session.step === "sex") {
-          await upsertSession(user.id, "pet_create", "weight", payload as Prisma.JsonObject);
-          await ctx.reply("Какой вес питомца в кг? Например: 3,5", backKeyboard());
+          await upsertSession(
+            user.id,
+            "pet_create",
+            "weight",
+            payload as Prisma.JsonObject,
+          );
+          await ctx.reply(
+            "Какой вес питомца в кг? Например: 3,5",
+            backKeyboard(),
+          );
           return;
         }
         if (session.step === "sterilized") {
-          await upsertSession(user.id, "pet_create", "sex", payload as Prisma.JsonObject);
+          await upsertSession(
+            user.id,
+            "pet_create",
+            "sex",
+            payload as Prisma.JsonObject,
+          );
           await ctx.reply("Какой пол питомца?", sexKeyboard());
           return;
         }
         if (session.step === "photo") {
-          await upsertSession(user.id, "pet_create", "sterilized", payload as Prisma.JsonObject);
+          await upsertSession(
+            user.id,
+            "pet_create",
+            "sterilized",
+            payload as Prisma.JsonObject,
+          );
           await ctx.reply("Стерилизована ли кошка?", yesNoKeyboard());
           return;
         }
@@ -178,22 +249,46 @@ export const createBot = () => {
 
       if (session.flow === "feeding_edit") {
         if (session.step === "daily_wet") {
-          await upsertSession(user.id, "feeding_edit", "daily_dry", payload as Prisma.JsonObject);
-          await ctx.reply("Суточная норма сухого корма в граммах?", backKeyboard());
+          await upsertSession(
+            user.id,
+            "feeding_edit",
+            "daily_dry",
+            payload as Prisma.JsonObject,
+          );
+          await ctx.reply(
+            "Суточная норма сухого корма в граммах?",
+            backKeyboard(),
+          );
           return;
         }
       }
 
       if (session.flow === "feeding_schedule_add") {
         if (session.step === "feed_type") {
-          await upsertSession(user.id, "feeding_schedule_add", "time", payload as Prisma.JsonObject);
-          await ctx.reply("Укажи время кормления в формате ЧЧ:ММ", backKeyboard());
+          await upsertSession(
+            user.id,
+            "feeding_schedule_add",
+            "time",
+            payload as Prisma.JsonObject,
+          );
+          await ctx.reply(
+            "Укажи время кормления в формате ЧЧ:ММ",
+            backKeyboard(),
+          );
           return;
         }
         if (session.step === "amount") {
-          await upsertSession(user.id, "feeding_schedule_add", "feed_type", payload as Prisma.JsonObject);
+          await upsertSession(
+            user.id,
+            "feeding_schedule_add",
+            "feed_type",
+            payload as Prisma.JsonObject,
+          );
           await ctx.reply("Тип корма?", {
-            reply_markup: { keyboard: [["Влажный", "Сухой"], [BACK_TEXT]], resize_keyboard: true },
+            reply_markup: {
+              keyboard: [["Влажный", "Сухой"], [BACK_TEXT]],
+              resize_keyboard: true,
+            },
           });
           return;
         }
@@ -204,7 +299,14 @@ export const createBot = () => {
         await ctx.reply("Редактирование отменено.");
         await ctx.reply("Вернуться в карточку питомца?", {
           reply_markup: {
-            inline_keyboard: [[{ text: "ℹ️ Открыть карточку", callback_data: `pet_info:${payload.selectedPetId}` }]],
+            inline_keyboard: [
+              [
+                {
+                  text: "ℹ️ Открыть карточку",
+                  callback_data: `pet_info:${payload.selectedPetId}`,
+                },
+              ],
+            ],
           },
         });
         return;
@@ -221,9 +323,11 @@ export const createBot = () => {
       if (text !== "Пропустить") {
         const pet = await addPetAccessByCode(user.id, text);
         if (pet) {
-          await ctx.reply("Готово! Подключила тебя к питомцу ✅");
+          await ctx.reply("Готово! Подключил тебя к питомцу ✅");
+          await sendHome(user.telegramId, ctx.chat.id);
+          return;
         } else {
-          await ctx.reply("Не нашла такой код. Можно продолжить без него.");
+          await ctx.reply("Не нашел такой код. Можно продолжить без него.");
         }
       }
       await upsertSession(user.id, "pet_create", "name", {});
@@ -234,16 +338,32 @@ export const createBot = () => {
     if (session.flow === "pet_create") {
       if (session.step === "name") {
         payload.petDraft = { ...payload.petDraft, name: text };
-        await upsertSession(user.id, "pet_create", "breed", payload as Prisma.JsonObject);
-        await ctx.reply("Какая у неё порода? Можно написать в свободной форме.", {
-          ...backKeyboard(),
-        });
+        await upsertSession(
+          user.id,
+          "pet_create",
+          "breed",
+          payload as Prisma.JsonObject,
+        );
+        await ctx.reply(
+          "Какая у неё порода? Можно написать в свободной форме.",
+          {
+            ...backKeyboard(),
+          },
+        );
         return;
       }
       if (session.step === "breed") {
         payload.petDraft = { ...payload.petDraft, breed: text };
-        await upsertSession(user.id, "pet_create", "birth_date", payload as Prisma.JsonObject);
-        await ctx.reply("Дата рождения в формате ДД.ММ.ГГГГ 📅", backKeyboard());
+        await upsertSession(
+          user.id,
+          "pet_create",
+          "birth_date",
+          payload as Prisma.JsonObject,
+        );
+        await ctx.reply(
+          "Дата рождения в формате ДД.ММ.ГГГГ 📅",
+          backKeyboard(),
+        );
         return;
       }
       if (session.step === "birth_date") {
@@ -252,9 +372,20 @@ export const createBot = () => {
           await ctx.reply("Не получилось распознать дату. Пример: 15.05.2024");
           return;
         }
-        payload.petDraft = { ...payload.petDraft, birthDate: date.toISOString() };
-        await upsertSession(user.id, "pet_create", "weight", payload as Prisma.JsonObject);
-        await ctx.reply("Какой вес питомца в кг? Например: 3,5", backKeyboard());
+        payload.petDraft = {
+          ...payload.petDraft,
+          birthDate: date.toISOString(),
+        };
+        await upsertSession(
+          user.id,
+          "pet_create",
+          "weight",
+          payload as Prisma.JsonObject,
+        );
+        await ctx.reply(
+          "Какой вес питомца в кг? Например: 3,5",
+          backKeyboard(),
+        );
         return;
       }
       if (session.step === "weight") {
@@ -264,7 +395,12 @@ export const createBot = () => {
           return;
         }
         payload.petDraft = { ...payload.petDraft, weightKg: weight };
-        await upsertSession(user.id, "pet_create", "sex", payload as Prisma.JsonObject);
+        await upsertSession(
+          user.id,
+          "pet_create",
+          "sex",
+          payload as Prisma.JsonObject,
+        );
         await ctx.reply("Какой пол питомца?", sexKeyboard());
         return;
       }
@@ -273,8 +409,16 @@ export const createBot = () => {
           await ctx.reply("Выбери пол кнопкой.");
           return;
         }
-        payload.petDraft = { ...payload.petDraft, sex: text === "Девочка" ? "FEMALE" : "MALE" };
-        await upsertSession(user.id, "pet_create", "sterilized", payload as Prisma.JsonObject);
+        payload.petDraft = {
+          ...payload.petDraft,
+          sex: text === "Девочка" ? "FEMALE" : "MALE",
+        };
+        await upsertSession(
+          user.id,
+          "pet_create",
+          "sterilized",
+          payload as Prisma.JsonObject,
+        );
         await ctx.reply("Стерилизована ли кошка?", yesNoKeyboard());
         return;
       }
@@ -284,7 +428,12 @@ export const createBot = () => {
           return;
         }
         payload.petDraft = { ...payload.petDraft, isSterilized: text === "Да" };
-        await upsertSession(user.id, "pet_create", "photo", payload as Prisma.JsonObject);
+        await upsertSession(
+          user.id,
+          "pet_create",
+          "photo",
+          payload as Prisma.JsonObject,
+        );
         await ctx.reply("Отправь фото питомца 🖼️", backKeyboard());
         return;
       }
@@ -298,7 +447,12 @@ export const createBot = () => {
           return;
         }
         const data = { ...payload, dryFood: dry };
-        await upsertSession(user.id, "feeding_edit", "daily_wet", data as Prisma.JsonObject);
+        await upsertSession(
+          user.id,
+          "feeding_edit",
+          "daily_wet",
+          data as Prisma.JsonObject,
+        );
         await ctx.reply("Суточная норма влажного корма в пачках?");
         return;
       }
@@ -308,7 +462,9 @@ export const createBot = () => {
           await ctx.reply("Укажи число, например 1 или 0,5");
           return;
         }
-        const dry = Number((payload as SessionPayload & { dryFood?: number }).dryFood ?? 0);
+        const dry = Number(
+          (payload as SessionPayload & { dryFood?: number }).dryFood ?? 0,
+        );
         await updateDailyNorm(payload.selectedPetId, dry, wet);
         await clearSession(user.id);
         await ctx.reply("Нормы питания обновлены ✅");
@@ -327,9 +483,17 @@ export const createBot = () => {
           return;
         }
         const nextPayload = { ...payload, tempMinutesOfDay: minutes };
-        await upsertSession(user.id, "feeding_schedule_add", "feed_type", nextPayload as Prisma.JsonObject);
+        await upsertSession(
+          user.id,
+          "feeding_schedule_add",
+          "feed_type",
+          nextPayload as Prisma.JsonObject,
+        );
         await ctx.reply("Тип корма?", {
-          reply_markup: { keyboard: [["Влажный", "Сухой"], [BACK_TEXT]], resize_keyboard: true },
+          reply_markup: {
+            keyboard: [["Влажный", "Сухой"], [BACK_TEXT]],
+            resize_keyboard: true,
+          },
         });
         return;
       }
@@ -339,8 +503,16 @@ export const createBot = () => {
           await ctx.reply("Выбери тип кнопкой: Влажный или Сухой");
           return;
         }
-        const nextPayload = { ...payload, tempFeedType: text === "Влажный" ? "WET" : "DRY" };
-        await upsertSession(user.id, "feeding_schedule_add", "amount", nextPayload as Prisma.JsonObject);
+        const nextPayload = {
+          ...payload,
+          tempFeedType: text === "Влажный" ? "WET" : "DRY",
+        };
+        await upsertSession(
+          user.id,
+          "feeding_schedule_add",
+          "amount",
+          nextPayload as Prisma.JsonObject,
+        );
         await ctx.reply(
           text === "Влажный"
             ? "Укажи количество пачек (можно дробное, например 0,5)"
@@ -352,22 +524,42 @@ export const createBot = () => {
 
       if (session.step === "amount") {
         const amount = parseWeight(text);
-        if (amount === null || payload.tempMinutesOfDay === undefined || !payload.tempFeedType) {
+        if (
+          amount === null ||
+          payload.tempMinutesOfDay === undefined ||
+          !payload.tempFeedType
+        ) {
           await ctx.reply("Проверь данные и попробуй снова.");
           return;
         }
-        await addScheduleItem(payload.selectedPetId, payload.tempMinutesOfDay, payload.tempFeedType, amount);
+        await addScheduleItem(
+          payload.selectedPetId,
+          payload.tempMinutesOfDay,
+          payload.tempFeedType,
+          amount,
+        );
         await clearSession(user.id);
         await ctx.reply("Слот расписания добавлен ✅", {
           reply_markup: {
-            inline_keyboard: [[{ text: "🕒 Открыть расписание", callback_data: `nutrition_schedule:${payload.selectedPetId}` }]],
+            inline_keyboard: [
+              [
+                {
+                  text: "🕒 Открыть расписание",
+                  callback_data: `nutrition_schedule:${payload.selectedPetId}`,
+                },
+              ],
+            ],
           },
         });
         return;
       }
     }
 
-    if (session.flow === "event_comment" && payload.selectedPetId && payload.pendingEventKind) {
+    if (
+      session.flow === "event_comment" &&
+      payload.selectedPetId &&
+      payload.pendingEventKind
+    ) {
       await createPetEvent({
         petId: payload.selectedPetId,
         kind: payload.pendingEventKind,
@@ -387,7 +579,10 @@ export const createBot = () => {
       }
       await prisma.pet.update({
         where: { id: payload.selectedPetId },
-        data: { currentWeightKg: weight, weightLogs: { create: { weightKg: weight } } },
+        data: {
+          currentWeightKg: weight,
+          weightLogs: { create: { weightKg: weight } },
+        },
       });
       await clearSession(user.id);
       await ctx.reply("Вес обновлен ✅");
@@ -408,7 +603,11 @@ export const createBot = () => {
       return;
     }
 
-    if (session.flow === "pet_edit" && payload.selectedPetId && payload.editField) {
+    if (
+      session.flow === "pet_edit" &&
+      payload.selectedPetId &&
+      payload.editField
+    ) {
       if (payload.editField === "name") {
         await updatePetName(payload.selectedPetId, text);
       } else if (payload.editField === "breed") {
@@ -425,7 +624,10 @@ export const createBot = () => {
           await ctx.reply("Выбери пол кнопкой");
           return;
         }
-        await updatePetSex(payload.selectedPetId, text === "Девочка" ? "FEMALE" : "MALE");
+        await updatePetSex(
+          payload.selectedPetId,
+          text === "Девочка" ? "FEMALE" : "MALE",
+        );
       } else if (payload.editField === "sterilized") {
         if (!["Да", "Нет"].includes(text)) {
           await ctx.reply("Выбери Да или Нет");
@@ -440,7 +642,11 @@ export const createBot = () => {
       return;
     }
 
-    if (session.flow === "report_custom_date" && payload.selectedPetId && payload.reportKind) {
+    if (
+      session.flow === "report_custom_date" &&
+      payload.selectedPetId &&
+      payload.reportKind
+    ) {
       const date = parseDateDDMMYYYY(text);
       if (!date) {
         await ctx.reply("Неверный формат даты. Пример: 15.05.2024");
@@ -450,30 +656,65 @@ export const createBot = () => {
       const end = dayjs(date).endOf("day").toDate();
       if (payload.reportKind === "weight") {
         const logs = await prisma.weightLog.findMany({
-          where: { petId: payload.selectedPetId, createdAt: { gte: start, lte: end } },
+          where: {
+            petId: payload.selectedPetId,
+            createdAt: { gte: start, lte: end },
+          },
           orderBy: { createdAt: "asc" },
         });
         const report = buildWeightReport(
-          logs.map((x) => ({ date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"), weightKg: x.weightKg })),
+          logs.map((x) => ({
+            date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
+            weightKg: x.weightKg,
+          })),
         );
-        await ctx.replyWithDocument(Input.fromBuffer(report, "weight_custom_date.xlsx"));
+        await ctx.replyWithDocument(
+          Input.fromBuffer(report, "weight_custom_date.xlsx"),
+        );
       } else {
-        const pet = await prisma.pet.findUnique({ where: { id: payload.selectedPetId } });
+        const pet = await prisma.pet.findUnique({
+          where: { id: payload.selectedPetId },
+        });
         if (!pet) {
           await clearSession(user.id);
           return;
         }
         const [weights, events, feedings] = await Promise.all([
-          prisma.weightLog.findMany({ where: { petId: payload.selectedPetId, createdAt: { gte: start, lte: end } }, orderBy: { createdAt: "asc" } }),
-          prisma.petEvent.findMany({ where: { petId: payload.selectedPetId, createdAt: { gte: start, lte: end } }, include: { customEventType: true }, orderBy: { createdAt: "asc" } }),
-          prisma.feedingLog.findMany({ where: { petId: payload.selectedPetId, createdAt: { gte: start, lte: end } }, orderBy: { createdAt: "asc" } }),
+          prisma.weightLog.findMany({
+            where: {
+              petId: payload.selectedPetId,
+              createdAt: { gte: start, lte: end },
+            },
+            orderBy: { createdAt: "asc" },
+          }),
+          prisma.petEvent.findMany({
+            where: {
+              petId: payload.selectedPetId,
+              createdAt: { gte: start, lte: end },
+            },
+            include: { customEventType: true },
+            orderBy: { createdAt: "asc" },
+          }),
+          prisma.feedingLog.findMany({
+            where: {
+              petId: payload.selectedPetId,
+              createdAt: { gte: start, lte: end },
+            },
+            orderBy: { createdAt: "asc" },
+          }),
         ]);
         const report = buildEventsReport(
           pet.name,
-          weights.map((x) => ({ date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"), weightKg: x.weightKg })),
+          weights.map((x) => ({
+            date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
+            weightKg: x.weightKg,
+          })),
           events.map((x) => ({
             date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
-            type: x.kind === "CUSTOM" ? x.customEventType?.label ?? "Другое" : eventLabels[x.kind],
+            type:
+              x.kind === "CUSTOM"
+                ? (x.customEventType?.label ?? "Другое")
+                : eventLabels[x.kind],
             comment: x.comment ?? "",
           })),
           feedings.map((x) => ({
@@ -482,7 +723,9 @@ export const createBot = () => {
             comment: [x.feedType, x.amount].filter(Boolean).join(" "),
           })),
         );
-        await ctx.replyWithDocument(Input.fromBuffer(report, `events_${pet.name}_custom_date.xlsx`));
+        await ctx.replyWithDocument(
+          Input.fromBuffer(report, `events_${pet.name}_custom_date.xlsx`),
+        );
       }
       await clearSession(user.id);
       return;
@@ -507,8 +750,17 @@ export const createBot = () => {
       return;
     }
     const draft = payload.petDraft;
-    if (!draft?.name || !draft.breed || !draft.birthDate || !draft.weightKg || !draft.sex || draft.isSterilized === undefined) {
-      await ctx.reply("Сессия регистрации устарела. Давай начнем заново через /start");
+    if (
+      !draft?.name ||
+      !draft.breed ||
+      !draft.birthDate ||
+      !draft.weightKg ||
+      !draft.sex ||
+      draft.isSterilized === undefined
+    ) {
+      await ctx.reply(
+        "Сессия регистрации устарела. Давай начнем заново через /start",
+      );
       return;
     }
     const pet = await createPetFromDraft(user.id, {
@@ -531,11 +783,13 @@ export const createBot = () => {
     if (!ctx.from || !("data" in ctx.callbackQuery)) {
       return;
     }
+
     const data = ctx.callbackQuery.data;
     const user = await getUserWithPets(BigInt(ctx.from.id));
     if (!user) {
       return;
     }
+
     await ctx.answerCbQuery();
 
     if (data === "pet:add") {
@@ -546,14 +800,26 @@ export const createBot = () => {
 
     if (data.startsWith("pet:")) {
       const petId = data.split(":")[1];
-      await upsertSession(user.id, "pet_menu", "selected", { selectedPetId: petId });
+      await upsertSession(user.id, "pet_menu", "selected", {
+        selectedPetId: petId,
+      });
       await ctx.reply("Что делаем с питомцем?", {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "ℹ️ Основная информация", callback_data: `pet_info:${petId}` }],
+            [
+              {
+                text: "ℹ️ Основная информация",
+                callback_data: `pet_info:${petId}`,
+              },
+            ],
             [{ text: "🍽️ Покормить", callback_data: `feed:${petId}` }],
             [{ text: "📝 Записать событие", callback_data: `event:${petId}` }],
-            [{ text: "🗑️ Удалить информацию", callback_data: `delete:${petId}` }],
+            [
+              {
+                text: "🗑️ Удалить информацию",
+                callback_data: `delete:${petId}`,
+              },
+            ],
             [{ text: "⬅️ Назад", callback_data: "home" }],
           ],
         },
@@ -577,31 +843,46 @@ export const createBot = () => {
         { parse_mode: "Markdown" },
       );
       await upsertSession(user.id, "share", "join_code", {});
-      await ctx.reply("Или отправь мне код, чтобы подключиться к другому питомцу.");
+      await ctx.reply(
+        "Или отправь мне код, чтобы подключиться к другому питомцу.",
+      );
       return;
     }
 
     if (data.startsWith("pet_info:")) {
       const petId = data.split(":")[1];
-      const pet = await prisma.pet.findUnique({ where: { id: petId }, include: { feedingConfig: { include: { scheduleItems: true } } } });
+      const pet = await prisma.pet.findUnique({
+        where: { id: petId },
+        include: { feedingConfig: { include: { scheduleItems: true } } },
+      });
       if (!pet || pet.isDeleted) {
         await ctx.reply("Питомец не найден");
         return;
       }
+
       const schedule = pet.feedingConfig?.scheduleItems
-        .map((i) => `${formatMinutesToHHMM(i.minutesOfDay)} - ${i.amount} ${i.feedType === "WET" ? "пач." : "гр."} ${i.feedType === "WET" ? "влажного" : "сухого"}`)
+        .map(
+          (i) =>
+            `${formatMinutesToHHMM(i.minutesOfDay)} - ${i.amount} ${i.feedType === "WET" ? "пач." : "гр."} ${i.feedType === "WET" ? "влажного" : "сухого"}`,
+        )
         .join("\n");
-      await ctx.reply(
-        `🐱 ${pet.name}\nПорода: ${pet.breed}\nДата рождения: ${dayjs(pet.birthDate).format("DD.MM.YYYY")}\nВес: ${pet.currentWeightKg} кг\nПол: ${pet.sex === "FEMALE" ? "девочка" : "мальчик"}\nСтерилизована: ${pet.isSterilized ? "да" : "нет"}\n\nПитание:\n${
+
+      await ctx.replyWithPhoto(pet.photoFileId, {
+        caption: `🐱 ${pet.name}\nПорода: ${pet.breed}\nДата рождения: ${dayjs(pet.birthDate).format("DD.MM.YYYY")}\nВес: ${pet.currentWeightKg} кг\nПол: ${pet.sex === "FEMALE" ? "девочка" : "мальчик"}\nСтерилизована: ${pet.isSterilized ? "да" : "нет"}\n\nПитание:\n${
           pet.feedingConfig
             ? `Сухой корм: ${pet.feedingConfig.dryFoodDailyGrams ?? 0} гр/сутки\nВлажный корм: ${pet.feedingConfig.wetFoodDailyPacks ?? 0} пач/сутки\n${schedule ? `Расписание:\n${schedule}` : "Расписание не заполнено"}`
             : "Настройки питания пока не заполнены"
         }`,
-      );
+      });
       await ctx.reply("Выбери раздел:", {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "✏️ Редактировать информацию", callback_data: `pet_edit_menu:${petId}` }],
+            [
+              {
+                text: "✏️ Редактировать информацию",
+                callback_data: `pet_edit_menu:${petId}`,
+              },
+            ],
             [{ text: "⚖️ Вес", callback_data: `weight:${petId}` }],
             [{ text: "🍽️ Питание", callback_data: `nutrition:${petId}` }],
             [{ text: "📋 События", callback_data: `events:${petId}` }],
@@ -619,9 +900,19 @@ export const createBot = () => {
           inline_keyboard: [
             [{ text: "Кличка", callback_data: `pet_edit:${petId}:name` }],
             [{ text: "Порода", callback_data: `pet_edit:${petId}:breed` }],
-            [{ text: "Дата рождения", callback_data: `pet_edit:${petId}:birth_date` }],
+            [
+              {
+                text: "Дата рождения",
+                callback_data: `pet_edit:${petId}:birth_date`,
+              },
+            ],
             [{ text: "Пол", callback_data: `pet_edit:${petId}:sex` }],
-            [{ text: "Стерилизация", callback_data: `pet_edit:${petId}:sterilized` }],
+            [
+              {
+                text: "Стерилизация",
+                callback_data: `pet_edit:${petId}:sterilized`,
+              },
+            ],
             [{ text: "⬅️ Назад", callback_data: `pet_info:${petId}` }],
           ],
         },
@@ -632,7 +923,10 @@ export const createBot = () => {
     if (data.startsWith("pet_edit:")) {
       const [, petId, field] = data.split(":");
       const editField = field as SessionPayload["editField"];
-      await upsertSession(user.id, "pet_edit", "value", { selectedPetId: petId, editField });
+      await upsertSession(user.id, "pet_edit", "value", {
+        selectedPetId: petId,
+        editField,
+      });
 
       if (field === "sex") {
         await ctx.reply("Выбери пол:", sexKeyboard());
@@ -650,15 +944,30 @@ export const createBot = () => {
 
     if (data.startsWith("weight:")) {
       const petId = data.split(":")[1];
-      const logs = await prisma.weightLog.findMany({ where: { petId }, orderBy: { createdAt: "desc" }, take: 4 });
-      const trend = logs.length > 1 ? logs[0].weightKg - logs.at(-1)!.weightKg : 0;
+      const logs = await prisma.weightLog.findMany({
+        where: { petId },
+        orderBy: { createdAt: "desc" },
+        take: 4,
+      });
+      const trend =
+        logs.length > 1 ? logs[0].weightKg - logs.at(-1)!.weightKg : 0;
       await ctx.reply(
         `Текущий вес: ${logs[0]?.weightKg ?? "—"} кг\nИзменение за период: ${trend >= 0 ? "+" : ""}${trend.toFixed(2)} кг`,
         {
           reply_markup: {
             inline_keyboard: [
-              [{ text: "✏️ Изменить вес", callback_data: `weight_edit:${petId}` }],
-              [{ text: "📤 История (XLSX)", callback_data: `weight_history:${petId}` }],
+              [
+                {
+                  text: "✏️ Изменить вес",
+                  callback_data: `weight_edit:${petId}`,
+                },
+              ],
+              [
+                {
+                  text: "📤 История (XLSX)",
+                  callback_data: `weight_history:${petId}`,
+                },
+              ],
               [{ text: "⬅️ Назад", callback_data: `pet_info:${petId}` }],
             ],
           },
@@ -669,7 +978,9 @@ export const createBot = () => {
 
     if (data.startsWith("weight_edit:")) {
       const petId = data.split(":")[1];
-      await upsertSession(user.id, "weight_update", "value", { selectedPetId: petId });
+      await upsertSession(user.id, "weight_update", "value", {
+        selectedPetId: petId,
+      });
       await ctx.reply("Укажи новый вес в кг");
       return;
     }
@@ -679,10 +990,25 @@ export const createBot = () => {
       await ctx.reply("Выбери период для отчета по весу:", {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "За неделю", callback_data: `weight_report:${petId}:week` }],
-            [{ text: "За месяц", callback_data: `weight_report:${petId}:month` }],
+            [
+              {
+                text: "За неделю",
+                callback_data: `weight_report:${petId}:week`,
+              },
+            ],
+            [
+              {
+                text: "За месяц",
+                callback_data: `weight_report:${petId}:month`,
+              },
+            ],
             [{ text: "За год", callback_data: `weight_report:${petId}:year` }],
-            [{ text: "За произвольную дату", callback_data: `weight_report_custom:${petId}` }],
+            [
+              {
+                text: "За произвольную дату",
+                callback_data: `weight_report_custom:${petId}`,
+              },
+            ],
           ],
         },
       });
@@ -693,11 +1019,19 @@ export const createBot = () => {
       const [, petId, periodRaw] = data.split(":");
       const period = periodRaw as "week" | "month" | "year";
       const range = getRangeByPeriod(period);
-      const logs = await prisma.weightLog.findMany({ where: { petId, createdAt: { gte: range.start, lte: range.end } }, orderBy: { createdAt: "asc" } });
+      const logs = await prisma.weightLog.findMany({
+        where: { petId, createdAt: { gte: range.start, lte: range.end } },
+        orderBy: { createdAt: "asc" },
+      });
       const report = buildWeightReport(
-        logs.map((x) => ({ date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"), weightKg: x.weightKg })),
+        logs.map((x) => ({
+          date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
+          weightKg: x.weightKg,
+        })),
       );
-      await ctx.replyWithDocument(Input.fromBuffer(report, `weight_${period}.xlsx`));
+      await ctx.replyWithDocument(
+        Input.fromBuffer(report, `weight_${period}.xlsx`),
+      );
       return;
     }
 
@@ -716,8 +1050,18 @@ export const createBot = () => {
       await ctx.reply("Раздел питания:", {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "✏️ Редактировать норму питания", callback_data: `nutrition_norm:${petId}` }],
-            [{ text: "🕒 Редактировать расписание", callback_data: `nutrition_schedule:${petId}` }],
+            [
+              {
+                text: "✏️ Редактировать норму питания",
+                callback_data: `nutrition_norm:${petId}`,
+              },
+            ],
+            [
+              {
+                text: "🕒 Редактировать расписание",
+                callback_data: `nutrition_schedule:${petId}`,
+              },
+            ],
             [{ text: "⬅️ Назад", callback_data: `pet_info:${petId}` }],
           ],
         },
@@ -727,7 +1071,9 @@ export const createBot = () => {
 
     if (data.startsWith("nutrition_norm:")) {
       const petId = data.split(":")[1];
-      await upsertSession(user.id, "feeding_edit", "daily_dry", { selectedPetId: petId });
+      await upsertSession(user.id, "feeding_edit", "daily_dry", {
+        selectedPetId: petId,
+      });
       await ctx.reply("Суточная норма сухого корма в граммах?", backKeyboard());
       return;
     }
@@ -749,7 +1095,12 @@ export const createBot = () => {
           reply_markup: {
             inline_keyboard: [
               ...scheduleButtons,
-              [{ text: "➕ Добавить слот", callback_data: `nutrition_schedule_add:${petId}` }],
+              [
+                {
+                  text: "➕ Добавить слот",
+                  callback_data: `nutrition_schedule_add:${petId}`,
+                },
+              ],
               [{ text: "⬅️ Назад", callback_data: `nutrition:${petId}` }],
             ],
           },
@@ -760,7 +1111,9 @@ export const createBot = () => {
 
     if (data.startsWith("nutrition_schedule_add:")) {
       const petId = data.split(":")[1];
-      await upsertSession(user.id, "feeding_schedule_add", "time", { selectedPetId: petId });
+      await upsertSession(user.id, "feeding_schedule_add", "time", {
+        selectedPetId: petId,
+      });
       await ctx.reply("Укажи время кормления в формате ЧЧ:ММ", backKeyboard());
       return;
     }
@@ -769,27 +1122,50 @@ export const createBot = () => {
       const [, petId, scheduleItemId] = data.split(":");
       await deleteScheduleItem(scheduleItemId);
       await ctx.reply("Слот удален ✅");
-      await ctx.reply("Открой раздел расписания снова для просмотра обновлений.", {
-        reply_markup: {
-          inline_keyboard: [[{ text: "🕒 Открыть расписание", callback_data: `nutrition_schedule:${petId}` }]],
+      await ctx.reply(
+        "Открой раздел расписания снова для просмотра обновлений.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🕒 Открыть расписание",
+                  callback_data: `nutrition_schedule:${petId}`,
+                },
+              ],
+            ],
+          },
         },
-      });
+      );
       return;
     }
 
     if (data.startsWith("feed:")) {
       const petId = data.split(":")[1];
-      const feedingState = await getPendingScheduleItemsForToday(petId, user.timezone);
+      const feedingState = await getPendingScheduleItemsForToday(
+        petId,
+        user.timezone,
+      );
       if (!feedingState?.pet) {
         return;
       }
-      if (!feedingState.pet.feedingConfig || feedingState.pet.feedingConfig.scheduleItems.length === 0) {
+      if (
+        !feedingState.pet.feedingConfig ||
+        feedingState.pet.feedingConfig.scheduleItems.length === 0
+      ) {
         await quickFeed(petId);
         await ctx.reply(
           "Записала прием пищи 🫶 Если хочешь вести питание детальнее, заполни нормы и расписание.",
           {
             reply_markup: {
-              inline_keyboard: [[{ text: "🍽️ Перейти в питание", callback_data: `nutrition:${petId}` }]],
+              inline_keyboard: [
+                [
+                  {
+                    text: "🍽️ Перейти в питание",
+                    callback_data: `nutrition:${petId}`,
+                  },
+                ],
+              ],
             },
           },
         );
@@ -831,21 +1207,37 @@ export const createBot = () => {
             .map((event) => {
               const label =
                 event.kind === "CUSTOM"
-                  ? event.customEventType?.label ?? "Другое"
+                  ? (event.customEventType?.label ?? "Другое")
                   : eventLabels[event.kind];
               return `• ${dayjs(event.createdAt).format("HH:mm")} — ${label}${event.comment ? ` (${event.comment})` : ""}`;
             })
             .join("\n")
         : "Сегодня событий пока нет.";
-      await ctx.reply(`Сводка за сегодня:\nКормления: ${today.feedings}\n${eventsText}`);
+      await ctx.reply(
+        `Сводка за сегодня:\nКормления: ${today.feedings}\n${eventsText}`,
+      );
 
-      await upsertSession(user.id, "event_pick", "kind", { selectedPetId: petId });
+      await upsertSession(user.id, "event_pick", "kind", {
+        selectedPetId: petId,
+      });
       await ctx.reply("Выбери событие или добавь новое:", {
         reply_markup: {
           inline_keyboard: [
-            ...defaultEvents.map((x) => [{ text: x.label, callback_data: `event_pick:${petId}:${x.kind}` }]),
-            [{ text: "➕ Добавить свое событие", callback_data: `event_new:${petId}` }],
-            [{ text: "📤 Отчеты (XLSX)", callback_data: `events_report_menu:${petId}` }],
+            ...defaultEvents.map((x) => [
+              { text: x.label, callback_data: `event_pick:${petId}:${x.kind}` },
+            ]),
+            [
+              {
+                text: "➕ Добавить свое событие",
+                callback_data: `event_new:${petId}`,
+              },
+            ],
+            [
+              {
+                text: "📤 Отчеты (XLSX)",
+                callback_data: `events_report_menu:${petId}`,
+              },
+            ],
           ],
         },
       });
@@ -864,7 +1256,9 @@ export const createBot = () => {
 
     if (data.startsWith("event_new:")) {
       const petId = data.split(":")[1];
-      await upsertSession(user.id, "event_new", "name", { selectedPetId: petId });
+      await upsertSession(user.id, "event_new", "name", {
+        selectedPetId: petId,
+      });
       await ctx.reply("Напиши название нового события:");
       return;
     }
@@ -874,10 +1268,25 @@ export const createBot = () => {
       await ctx.reply("Выбери период для отчета по событиям:", {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "За неделю", callback_data: `events_report:${petId}:week` }],
-            [{ text: "За месяц", callback_data: `events_report:${petId}:month` }],
+            [
+              {
+                text: "За неделю",
+                callback_data: `events_report:${petId}:week`,
+              },
+            ],
+            [
+              {
+                text: "За месяц",
+                callback_data: `events_report:${petId}:month`,
+              },
+            ],
             [{ text: "За год", callback_data: `events_report:${petId}:year` }],
-            [{ text: "За произвольную дату", callback_data: `events_report_custom:${petId}` }],
+            [
+              {
+                text: "За произвольную дату",
+                callback_data: `events_report_custom:${petId}`,
+              },
+            ],
           ],
         },
       });
@@ -893,16 +1302,32 @@ export const createBot = () => {
       }
       const range = getRangeByPeriod(period);
       const [weights, events, feedings] = await Promise.all([
-        prisma.weightLog.findMany({ where: { petId, createdAt: { gte: range.start, lte: range.end } }, orderBy: { createdAt: "asc" } }),
-        prisma.petEvent.findMany({ where: { petId, createdAt: { gte: range.start, lte: range.end } }, include: { customEventType: true }, orderBy: { createdAt: "asc" } }),
-        prisma.feedingLog.findMany({ where: { petId, createdAt: { gte: range.start, lte: range.end } }, orderBy: { createdAt: "asc" } }),
+        prisma.weightLog.findMany({
+          where: { petId, createdAt: { gte: range.start, lte: range.end } },
+          orderBy: { createdAt: "asc" },
+        }),
+        prisma.petEvent.findMany({
+          where: { petId, createdAt: { gte: range.start, lte: range.end } },
+          include: { customEventType: true },
+          orderBy: { createdAt: "asc" },
+        }),
+        prisma.feedingLog.findMany({
+          where: { petId, createdAt: { gte: range.start, lte: range.end } },
+          orderBy: { createdAt: "asc" },
+        }),
       ]);
       const report = buildEventsReport(
         pet.name,
-        weights.map((x) => ({ date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"), weightKg: x.weightKg })),
+        weights.map((x) => ({
+          date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
+          weightKg: x.weightKg,
+        })),
         events.map((x) => ({
           date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
-          type: x.kind === "CUSTOM" ? x.customEventType?.label ?? "Другое" : eventLabels[x.kind],
+          type:
+            x.kind === "CUSTOM"
+              ? (x.customEventType?.label ?? "Другое")
+              : eventLabels[x.kind],
           comment: x.comment ?? "",
         })),
         feedings.map((x) => ({
@@ -911,7 +1336,9 @@ export const createBot = () => {
           comment: [x.feedType, x.amount].filter(Boolean).join(" "),
         })),
       );
-      await ctx.replyWithDocument(Input.fromBuffer(report, `events_${pet.name}_${period}.xlsx`));
+      await ctx.replyWithDocument(
+        Input.fromBuffer(report, `events_${pet.name}_${period}.xlsx`),
+      );
       return;
     }
 
@@ -952,16 +1379,24 @@ export const createBot = () => {
     if (!ctx.from) {
       return next();
     }
+
     const user = await getUserWithSession(BigInt(ctx.from.id));
     const session = user?.sessions[0];
+
     if (!user || session?.flow !== "event_new" || session.step !== "name") {
       return next();
     }
+
     const payload = toPayload(session.payload);
     if (!payload.selectedPetId) {
       return next();
     }
-    const customType = await upsertCustomEventType(payload.selectedPetId, ctx.message.text.trim(), user.id);
+
+    const customType = await upsertCustomEventType(
+      payload.selectedPetId,
+      ctx.message.text.trim(),
+      user.id,
+    );
     await upsertSession(user.id, "event_comment", "comment", {
       selectedPetId: payload.selectedPetId,
       pendingEventKind: "CUSTOM",

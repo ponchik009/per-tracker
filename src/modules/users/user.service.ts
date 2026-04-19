@@ -10,7 +10,10 @@ export const getOrCreateUser = async (params: {
 }): Promise<User> => {
   return prisma.user.upsert({
     where: { telegramId: params.telegramId },
-    update: { username: params.username ?? null, firstName: params.firstName ?? null },
+    update: {
+      username: params.username ?? null,
+      firstName: params.firstName ?? null,
+    },
     create: {
       telegramId: params.telegramId,
       username: params.username ?? null,
@@ -19,6 +22,11 @@ export const getOrCreateUser = async (params: {
     },
   });
 };
+
+export const isUserExists = async (telegramId: bigint) =>
+  prisma.user
+    .count({ where: { telegramId } })
+    .then((numberOfUsers) => numberOfUsers > 0);
 
 export const getUserWithSession = async (telegramId: bigint) => {
   return prisma.user.findUnique({
