@@ -141,7 +141,7 @@ export const createBot = () => {
       firstName: ctx.from.first_name ?? undefined,
     });
 
-    if (userExists) {
+    if (!userExists) {
       await clearSession(user.id);
       await ctx.reply(
         "Привет! Я помогу отслеживать питание, туалет и другие события кошки 🐾",
