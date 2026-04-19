@@ -468,8 +468,33 @@ export const createBot = () => {
         await updateDailyNorm(payload.selectedPetId, dry, wet);
         await clearSession(user.id);
         await ctx.reply("Нормы питания обновлены ✅");
+
         if (ctx.chat) {
-          await sendHome(BigInt(ctx.from.id), ctx.chat.id);
+          // await sendHome(BigInt(ctx.from.id), ctx.chat.id);
+          await ctx.reply("Раздел питания:", {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "✏️ Редактировать норму питания",
+                    callback_data: `nut_norm:${payload.selectedPetId}`,
+                  },
+                ],
+                [
+                  {
+                    text: "🕒 Редактировать расписание",
+                    callback_data: `nut_sch:${payload.selectedPetId}`,
+                  },
+                ],
+                [
+                  {
+                    text: "⬅️ Назад",
+                    callback_data: `pet_info:${payload.selectedPetId}`,
+                  },
+                ],
+              ],
+            },
+          });
         }
         return;
       }
@@ -568,6 +593,42 @@ export const createBot = () => {
       });
       await clearSession(user.id);
       await ctx.reply("Событие записано ✍️");
+      await ctx.reply("Выбери раздел:", {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "✏️ Редактировать информацию",
+                callback_data: `pet_edit_menu:${payload.selectedPetId}`,
+              },
+            ],
+            [
+              {
+                text: "⚖️ Вес",
+                callback_data: `weight:${payload.selectedPetId}`,
+              },
+            ],
+            [
+              {
+                text: "🍽️ Питание",
+                callback_data: `nut:${payload.selectedPetId}`,
+              },
+            ],
+            [
+              {
+                text: "📋 События",
+                callback_data: `events:${payload.selectedPetId}`,
+              },
+            ],
+            [
+              {
+                text: "⬅️ Назад",
+                callback_data: `pet:${payload.selectedPetId}`,
+              },
+            ],
+          ],
+        },
+      });
       return;
     }
 
@@ -589,7 +650,7 @@ export const createBot = () => {
       return;
     }
 
-    if (session.flow === "share" && session.step === "join_code") {     
+    if (session.flow === "share" && session.step === "join_code") {
       if (text === "Пропустить") {
         sendHome(user.telegramId, ctx.chat.id);
       }
