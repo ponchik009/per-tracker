@@ -10,7 +10,6 @@ async function main() {
       telegramId: BigInt(111111111),
       firstName: "Demo",
       timezone: "Europe/Moscow",
-      timezoneOffsetMin: 180,
     },
   });
 

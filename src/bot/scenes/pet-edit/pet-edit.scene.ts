@@ -10,6 +10,7 @@ import {
 import { parseDateDDMMYYYY } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
+import { leaveWizardIfNoPetAccess } from "../../guards/scene-pet-access.guard";
 import { openPetCardInlineKeyboard } from "../../ui/inline/pet.inline";
 import { BACK_TEXT, backKeyboard, sexKeyboard, yesNoKeyboard } from "../../ui/reply/keyboards";
 
@@ -45,6 +46,8 @@ export const petEditWizard = new Scenes.WizardScene<Scenes.WizardContext>(
       await ctx.scene.leave();
       return;
     }
+
+    if (!(await leaveWizardIfNoPetAccess(ctx, state.petId))) return;
 
     const prompt = getPrompt(state.field);
     await ctx.reply(prompt.text, prompt.keyboard);

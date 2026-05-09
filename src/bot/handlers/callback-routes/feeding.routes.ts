@@ -5,6 +5,7 @@ import {
   logScheduledFeeding,
   quickFeed,
 } from "../../../modules/feeding/feeding.service";
+import { getPetIdForFeedingScheduleId } from "../../../modules/pets/pet-access.service";
 import { formatMinutesToHHMM } from "../../../utils/date";
 import {
   feedingMenuInlineKeyboard,
@@ -14,12 +15,14 @@ import {
 } from "../../ui/inline/feeding.inline";
 import { openPetCardInlineKeyboard } from "../../ui/inline/pet.inline";
 import { PrefixCallbackRoute } from "./callback-route.types";
+import { replyIfNoPetAccess } from "./pet-access.reply";
 
 export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
   {
     prefix: "nut:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       await ctx.reply("Раздел питания:", {
         reply_markup: { inline_keyboard: feedingMenuInlineKeyboard(petId) },
       });
@@ -27,15 +30,17 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "nut_norm:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       await ctx.scene.enter("FEEDING_EDIT", { petId });
     },
   },
   {
     prefix: "nut_sch:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       const config = await getFeedingConfigWithSchedule(petId);
       await ctx.reply(
         config?.scheduleItems.length
@@ -59,16 +64,21 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "nut_sch_add:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       await ctx.scene.enter("FEEDING_SCHEDULE_ADD", { petId });
     },
   },
   {
     prefix: "nsd:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const scheduleItemId = data.split(":")[1];
-      const petId = await deleteScheduleItem(scheduleItemId);
+      const petId = await getPetIdForFeedingScheduleId(scheduleItemId);
+      if (!petId || !(await replyIfNoPetAccess(ctx, user, petId))) {
+        return;
+      }
+      await deleteScheduleItem(scheduleItemId);
       await ctx.reply("Слот удален ✅");
       await ctx.reply("Открой раздел расписания снова для просмотра обновлений.", {
         reply_markup: { inline_keyboard: openScheduleInlineKeyboard(petId) },
@@ -79,6 +89,7 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
     prefix: "feed:",
     handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       const feedingState = await getPendingScheduleItemsForToday(petId, user.timezone);
       if (!feedingState?.pet) return;
 
@@ -116,8 +127,13 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "feed_pick:",
-    handle: async ({ ctx }, data) => {
-      const schedule = await logScheduledFeeding(data.split(":")[1]);
+    handle: async ({ ctx, user }, data) => {
+      const scheduleId = data.split(":")[1];
+      const petId = await getPetIdForFeedingScheduleId(scheduleId);
+      if (!petId || !(await replyIfNoPetAccess(ctx, user, petId))) {
+        return;
+      }
+      const schedule = await logScheduledFeeding(scheduleId);
       if (!schedule) {
         return;
       }

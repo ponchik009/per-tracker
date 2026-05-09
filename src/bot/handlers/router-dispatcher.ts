@@ -27,7 +27,8 @@ export const dispatchByExactAndPrefix = async <Context>({
     return true;
   }
 
-  for (const route of prefixRoutes) {
+  const sortedPrefixes = [...prefixRoutes].sort((a, b) => b.prefix.length - a.prefix.length);
+  for (const route of sortedPrefixes) {
     if (value.startsWith(route.prefix)) {
       await route.handle(context, value);
       return true;

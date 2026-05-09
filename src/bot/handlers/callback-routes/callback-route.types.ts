@@ -1,10 +1,8 @@
 import { Scenes, Telegraf } from "telegraf";
 
-export type CallbackUser = {
-  id: string;
-  timezone: string;
-  pets: Array<{ pet: { id: string; isDeleted: boolean } }>;
-};
+import type { CallbackUser } from "../../../types/callback-user";
+
+export type { CallbackUser };
 
 export type CallbackRouteContext = {
   bot: Telegraf<any>;

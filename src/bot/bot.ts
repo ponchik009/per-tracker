@@ -1,4 +1,4 @@
-import { Scenes, session, Telegraf } from "telegraf";
+import { Scenes, Telegraf } from "telegraf";
 
 import { config } from "../config";
 import {
@@ -18,11 +18,12 @@ import { eventNewWizard } from "./scenes/events/event-new.scene";
 import { onboardingRefWizard } from "./scenes/onboarding/onboarding-ref.scene";
 import { sendHomeMenu } from "./handlers/home.handler";
 import { handleCallbackQuery } from "./handlers/callback-query.handler";
+import { createBotSessionMiddleware } from "./session.middleware";
 
 export const createBot = () => {
   const bot = new Telegraf<Scenes.WizardContext>(config.TELEGRAM_BOT_TOKEN);
 
-  bot.use(session());
+  bot.use(createBotSessionMiddleware());
   const stage = new Scenes.Stage([
     onboardingRefWizard,
     createPetWizard,
@@ -36,6 +37,15 @@ export const createBot = () => {
     eventNewWizard,
   ]);
   bot.use(stage.middleware());
+
+  bot.on("text", async (ctx, next) => {
+    const text = ctx.message.text ?? "";
+    if (text.startsWith("/")) {
+      await next();
+      return;
+    }
+    await ctx.reply("Используй кнопки под сообщениями или команду /start, чтобы открыть меню.");
+  });
 
   bot.start(async (ctx) => {
     if (!ctx.from) {
@@ -70,7 +80,11 @@ export const createBot = () => {
 
     await ctx.answerCbQuery();
 
-    await handleCallbackQuery(bot, ctx, user as any, data);
+    const matched = await handleCallbackQuery(bot, ctx, user, data);
+    if (!matched) {
+      console.warn("[callback_query] unmatched data:", data);
+      await ctx.reply("Действие не распознано. Открой меню снова.");
+    }
   });
 
   return bot;

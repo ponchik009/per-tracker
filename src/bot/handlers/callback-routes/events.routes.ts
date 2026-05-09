@@ -5,19 +5,12 @@ import {
   getCustomEventTypes,
   getTodayEventSummary,
 } from "../../../modules/events/event.service";
+import { petEventLabelsRu } from "../../../modules/events/event-labels";
 import { formatDateTimeByTimezone } from "../../../utils/date";
 import { eventsMenuInlineKeyboard } from "../../ui/inline/events.inline";
 import { eventsPeriodsInlineKeyboard } from "../../ui/inline/reports.inline";
 import { PrefixCallbackRoute } from "./callback-route.types";
-
-const eventLabels: Record<PetEventKind, string> = {
-  PEE: "Пописала",
-  POO: "Покакала",
-  PLAY: "Поиграла",
-  SYMPTOM: "Симптом",
-  CUSTOM: "Другое",
-  FEEDING: "Кормление",
-};
+import { replyIfNoPetAccess } from "./pet-access.reply";
 
 const defaultEvents: { kind: PetEventKind; label: string }[] = [
   { kind: "PEE", label: "Пописала" },
@@ -31,6 +24,7 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
     prefix: "events:",
     handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       const [today, customEvents] = await Promise.all([
         getTodayEventSummary(petId, user.timezone),
         getCustomEventTypes(petId),
@@ -41,7 +35,7 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
               const label =
                 event.kind === "CUSTOM"
                   ? (event.customEventType?.label ?? "Другое")
-                  : eventLabels[event.kind];
+                  : petEventLabelsRu[event.kind];
               return `• ${formatDateTimeByTimezone(event.createdAt, user.timezone, "HH:mm")} — ${label}${event.comment ? ` (${event.comment})` : ""}`;
             })
             .join("\n")
@@ -61,24 +55,30 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "event_pick:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const [, petId, kind] = data.split(":");
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       await ctx.scene.enter("EVENT_COMMENT", { petId, kind });
     },
   },
   {
     prefix: "event_new:",
-    handle: async ({ ctx }, data) => {
-      await ctx.scene.enter("EVENT_NEW", { petId: data.split(":")[1] });
+    handle: async ({ ctx, user }, data) => {
+      const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
+      await ctx.scene.enter("EVENT_NEW", { petId });
     },
   },
   {
     prefix: "epc:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const customEventKindId = data.split(":")[1];
       const customType = await getCustomEventTypeById(customEventKindId);
       if (!customType) {
         await ctx.reply("Не удалось найти тип события. Попробуй снова.");
+        return;
+      }
+      if (!(await replyIfNoPetAccess(ctx, user, customType.petId))) {
         return;
       }
       await ctx.scene.enter("EVENT_COMMENT", {
@@ -90,8 +90,9 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "events_report_menu:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       await ctx.reply("Выбери период для отчета по событиям:", {
         reply_markup: { inline_keyboard: eventsPeriodsInlineKeyboard(petId) },
       });
@@ -99,8 +100,9 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "events_report_custom:",
-    handle: async ({ ctx }, data) => {
+    handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
+      if (!(await replyIfNoPetAccess(ctx, user, petId))) return;
       await ctx.scene.enter("REPORT_CUSTOM_DATE", { petId, reportKind: "events" });
     },
   },

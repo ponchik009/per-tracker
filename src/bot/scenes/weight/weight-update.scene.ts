@@ -1,7 +1,8 @@
 import { Markup, Scenes } from "telegraf";
 
-import { prisma } from "../../../prisma";
+import { recordWeightForPet } from "../../../modules/weight/weight.service";
 import { parseWeight } from "../../../utils/date";
+import { leaveWizardIfNoPetAccess } from "../../guards/scene-pet-access.guard";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
 import { openPetCardInlineKeyboard } from "../../ui/inline/pet.inline";
@@ -14,6 +15,8 @@ interface WeightUpdateState {
 export const weightUpdateWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   "WEIGHT_UPDATE",
   async (ctx) => {
+    const state = ctx.scene.state as Partial<WeightUpdateState>;
+    if (!(await leaveWizardIfNoPetAccess(ctx, state.petId))) return;
     await ctx.reply("Укажи новый вес в кг", backKeyboard());
     return ctx.wizard.next();
   },
@@ -46,13 +49,7 @@ export const weightUpdateWizard = new Scenes.WizardScene<Scenes.WizardContext>(
       return;
     }
 
-    await prisma.pet.update({
-      where: { id: state.petId },
-      data: {
-        currentWeightKg: weight,
-        weightLogs: { create: { weightKg: weight } },
-      },
-    });
+    await recordWeightForPet(state.petId, weight);
     await ctx.reply("Вес обновлен ✅", Markup.removeKeyboard());
     await ctx.reply("Что дальше?", {
       reply_markup: { inline_keyboard: openPetCardInlineKeyboard(state.petId) },

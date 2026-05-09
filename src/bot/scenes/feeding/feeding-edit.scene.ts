@@ -4,6 +4,7 @@ import { updateDailyNorm } from "../../../modules/feeding/feeding.service";
 import { parseWeight } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
+import { leaveWizardIfNoPetAccess } from "../../guards/scene-pet-access.guard";
 import { feedingMenuInlineKeyboard } from "../../ui/inline/feeding.inline";
 import { BACK_TEXT, backKeyboard } from "../../ui/reply/keyboards";
 
@@ -21,6 +22,8 @@ export const feedingEditWizard = new Scenes.WizardScene<Scenes.WizardContext>(
       await ctx.scene.leave();
       return;
     }
+
+    if (!(await leaveWizardIfNoPetAccess(ctx, state.petId))) return;
 
     await ctx.reply("Суточная норма сухого корма в граммах?", backKeyboard());
     return ctx.wizard.next();

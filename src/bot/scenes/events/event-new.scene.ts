@@ -5,6 +5,7 @@ import { createPetEvent, upsertCustomEventType } from "../../../modules/events/e
 import { getOrCreateUser } from "../../../modules/users/user.service";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
+import { leaveWizardIfNoPetAccess } from "../../guards/scene-pet-access.guard";
 import { petSectionsInlineKeyboard } from "../../ui/inline/pet.inline";
 
 interface EventNewState {
@@ -15,6 +16,8 @@ interface EventNewState {
 export const eventNewWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   "EVENT_NEW",
   async (ctx) => {
+    const state = ctx.scene.state as Partial<EventNewState>;
+    if (!(await leaveWizardIfNoPetAccess(ctx, state.petId))) return;
     await ctx.reply("Напиши название нового события:");
     return ctx.wizard.next();
   },

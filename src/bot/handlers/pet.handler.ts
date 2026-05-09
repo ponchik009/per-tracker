@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { Scenes } from "telegraf";
 
-import { prisma } from "../../prisma";
+import { findPetWithFeedingScheduleForCard } from "../../modules/pets/pet.service";
 import { formatMinutesToHHMM } from "../../utils/date";
 import {
   petEditMenuInlineKeyboard,
@@ -16,10 +16,7 @@ export const replyPetMenu = async (ctx: Scenes.WizardContext, petId: string) => 
 };
 
 export const replyPetInfo = async (ctx: Scenes.WizardContext, petId: string) => {
-  const pet = await prisma.pet.findUnique({
-    where: { id: petId },
-    include: { feedingConfig: { include: { scheduleItems: true } } },
-  });
+  const pet = await findPetWithFeedingScheduleForCard(petId);
   if (!pet || pet.isDeleted) {
     await ctx.reply("Питомец не найден");
     return;

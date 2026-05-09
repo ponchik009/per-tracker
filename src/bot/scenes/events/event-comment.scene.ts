@@ -4,6 +4,7 @@ import { Markup, Scenes } from "telegraf";
 import { createPetEvent } from "../../../modules/events/event.service";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
+import { leaveWizardIfNoPetAccess } from "../../guards/scene-pet-access.guard";
 import { petSectionsInlineKeyboard } from "../../ui/inline/pet.inline";
 
 interface EventCommentState {
@@ -15,6 +16,8 @@ interface EventCommentState {
 export const eventCommentWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   "EVENT_COMMENT",
   async (ctx) => {
+    const state = ctx.scene.state as Partial<EventCommentState>;
+    if (!(await leaveWizardIfNoPetAccess(ctx, state.petId))) return;
     await ctx.reply("Добавь комментарий к событию:");
     return ctx.wizard.next();
   },

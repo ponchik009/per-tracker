@@ -1,6 +1,13 @@
 import { PetSex } from "@prisma/client";
 import { prisma } from "../../prisma";
 
+export const findPetWithFeedingScheduleForCard = async (petId: string) => {
+  return prisma.pet.findUnique({
+    where: { id: petId },
+    include: { feedingConfig: { include: { scheduleItems: true } } },
+  });
+};
+
 export const listActivePetsByTelegramId = async (telegramId: bigint) => {
   const user = await prisma.user.findUnique({
     where: { telegramId },

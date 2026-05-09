@@ -10,8 +10,10 @@ export const updateDailyNorm = async (petId: string, dryFoodDailyGrams: number, 
 };
 
 export const quickFeed = async (petId: string) => {
-  await prisma.feedingLog.create({ data: { petId, note: "manual quick log" } });
-  await prisma.petEvent.create({ data: { petId, kind: "FEEDING", comment: "Быстрое кормление" } });
+  await prisma.$transaction([
+    prisma.feedingLog.create({ data: { petId, note: "manual quick log" } }),
+    prisma.petEvent.create({ data: { petId, kind: "FEEDING", comment: "Быстрое кормление" } }),
+  ]);
 };
 
 export const getPendingScheduleItemsForToday = async (petId: string, timezone: string) => {
@@ -39,21 +41,23 @@ export const logScheduledFeeding = async (scheduleId: string) => {
   const schedule = await prisma.feedingSchedule.findUnique({ where: { id: scheduleId }, include: { feedingConfig: true } });
   if (!schedule) return null;
 
-  await prisma.feedingLog.create({
-    data: {
-      petId: schedule.feedingConfig.petId,
-      feedingScheduleId: schedule.id,
-      amount: schedule.amount,
-      feedType: schedule.feedType,
-    },
-  });
-  await prisma.petEvent.create({
-    data: {
-      petId: schedule.feedingConfig.petId,
-      kind: "FEEDING",
-      comment: `${schedule.amount} ${schedule.feedType}`,
-    },
-  });
+  await prisma.$transaction([
+    prisma.feedingLog.create({
+      data: {
+        petId: schedule.feedingConfig.petId,
+        feedingScheduleId: schedule.id,
+        amount: schedule.amount,
+        feedType: schedule.feedType,
+      },
+    }),
+    prisma.petEvent.create({
+      data: {
+        petId: schedule.feedingConfig.petId,
+        kind: "FEEDING",
+        comment: `${schedule.amount} ${schedule.feedType}`,
+      },
+    }),
+  ]);
   return schedule;
 };
 

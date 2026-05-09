@@ -1,12 +1,16 @@
 import { Input, Markup, Scenes } from "telegraf";
 
-import { prisma } from "../../../prisma";
+import { petEventLabelsRu } from "../../../modules/events/event-labels";
+import { loadEventsReportData } from "../../../modules/reports/report-queries.service";
+import { getUserTimezoneByTelegramId } from "../../../modules/users/user.service";
+import { listWeightLogsInRange } from "../../../modules/weight/weight.service";
 import { buildEventsReport, buildWeightReport } from "../../../services/reports";
 import {
   formatDateTimeByTimezone,
   getDayRangeForDateInTimezone,
 } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
+import { leaveWizardIfNoPetAccess } from "../../guards/scene-pet-access.guard";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
 import { BACK_TEXT, backKeyboard } from "../../ui/reply/keyboards";
 
@@ -15,18 +19,16 @@ interface ReportCustomDateState {
   reportKind: "weight" | "events";
 }
 
-const eventLabels = {
-  PEE: "Пописала",
-  POO: "Покакала",
-  PLAY: "Поиграла",
-  SYMPTOM: "Симптом",
-  CUSTOM: "Другое",
-  FEEDING: "Кормление",
-} as const;
-
 export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   "REPORT_CUSTOM_DATE",
   async (ctx) => {
+    const state = ctx.scene.state as Partial<ReportCustomDateState>;
+    if (!state.petId || !state.reportKind) {
+      await ctx.reply("Сессия отчета устарела.");
+      await ctx.scene.leave();
+      return;
+    }
+    if (!(await leaveWizardIfNoPetAccess(ctx, state.petId))) return;
     await ctx.reply("Введи дату в формате ДД.ММ.ГГГГ", backKeyboard());
     return ctx.wizard.next();
   },
@@ -44,6 +46,8 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
       return;
     }
 
+    if (!(await leaveWizardIfNoPetAccess(ctx, state.petId))) return;
+
     if (text === BACK_TEXT) {
       await ctx.reply("Построение отчета отменено.", Markup.removeKeyboard());
       await ctx.scene.leave();
@@ -56,11 +60,7 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
       return;
     }
 
-    const currentUser = await prisma.user.findUnique({
-      where: { telegramId: BigInt(ctx.from.id) },
-      select: { timezone: true },
-    });
-    const timezone = currentUser?.timezone ?? "UTC";
+    const timezone = (await getUserTimezoneByTelegramId(BigInt(ctx.from.id))) ?? "UTC";
     const range = getDayRangeForDateInTimezone(text, timezone);
     if (!range) {
       await ctx.reply("Неверный формат даты. Пример: 15.05.2024");
@@ -70,10 +70,7 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
     const periodLabel = `${formatDateTimeByTimezone(range.start, timezone)} — ${formatDateTimeByTimezone(range.end, timezone)}`;
 
     if (state.reportKind === "weight") {
-      const logs = await prisma.weightLog.findMany({
-        where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
-        orderBy: { createdAt: "asc" },
-      });
+      const logs = await listWeightLogsInRange(state.petId, range);
       const report = buildWeightReport(
         logs.map((x) => ({
           date: formatDateTimeByTimezone(x.createdAt, timezone),
@@ -82,28 +79,12 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
       );
       await ctx.replyWithDocument(Input.fromBuffer(report, "weight_custom_date.xlsx"));
     } else {
-      const pet = await prisma.pet.findUnique({ where: { id: state.petId } });
-      if (!pet) {
+      const bundle = await loadEventsReportData(state.petId, range);
+      if (!bundle) {
         await ctx.scene.leave();
         return;
       }
-
-      const [weights, events, feedings] = await Promise.all([
-        prisma.weightLog.findMany({
-          where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
-          orderBy: { createdAt: "asc" },
-        }),
-        prisma.petEvent.findMany({
-          where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
-          include: { customEventType: true },
-          orderBy: { createdAt: "asc" },
-        }),
-        prisma.feedingLog.findMany({
-          where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
-          orderBy: { createdAt: "asc" },
-        }),
-      ]);
-
+      const { pet, weights, events, feedings } = bundle;
       const report = buildEventsReport(
         pet.name,
         weights.map((x) => ({
@@ -115,7 +96,7 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
           type:
             x.kind === "CUSTOM"
               ? (x.customEventType?.label ?? "Другое")
-              : eventLabels[x.kind],
+              : petEventLabelsRu[x.kind],
           comment: x.comment ?? "",
         })),
         feedings.map((x) => ({

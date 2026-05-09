@@ -31,8 +31,8 @@ model User {
   telegramId          BigInt              @unique
   username            String?
   firstName           String?
+  /// IANA-зона (например Europe/Moscow); смещение не храним — dayjs вычисляет с учётом DST
   timezone            String              @default("Europe/Moscow")
-  timezoneOffsetMin   Int                 @default(180)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   pets                PetAccess[]

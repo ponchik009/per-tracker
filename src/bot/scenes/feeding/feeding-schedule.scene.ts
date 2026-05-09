@@ -1,6 +1,7 @@
 import { Markup, Scenes } from "telegraf";
 
 import { addScheduleItem } from "../../../modules/feeding/feeding.service";
+import { leaveWizardIfNoPetAccess } from "../../guards/scene-pet-access.guard";
 import { parseTimeHHMM, parseWeight } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
@@ -22,6 +23,8 @@ export const feedingScheduleWizard = new Scenes.WizardScene<Scenes.WizardContext
       await ctx.scene.leave();
       return;
     }
+
+    if (!(await leaveWizardIfNoPetAccess(ctx, state.petId))) return;
 
     await ctx.reply("Укажи время кормления в формате ЧЧ:ММ", backKeyboard());
     return ctx.wizard.next();

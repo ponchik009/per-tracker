@@ -2,6 +2,7 @@ import { User } from "@prisma/client";
 
 import { config } from "../../config";
 import { prisma } from "../../prisma";
+import type { CallbackUser } from "../../types/callback-user";
 
 export const getOrCreateUser = async (params: {
   telegramId: bigint;
@@ -28,9 +29,20 @@ export const isUserExists = async (telegramId: bigint) =>
     .count({ where: { telegramId } })
     .then((numberOfUsers) => numberOfUsers > 0);
 
-export const getUserWithPets = async (telegramId: bigint) => {
-  return prisma.user.findUnique({
+export const getUserTimezoneByTelegramId = async (telegramId: bigint) => {
+  const user = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { timezone: true },
+  });
+  return user?.timezone ?? null;
+};
+
+export const getUserWithPets = async (
+  telegramId: bigint,
+): Promise<CallbackUser | null> => {
+  const user = await prisma.user.findUnique({
     where: { telegramId },
     include: { pets: { include: { pet: true } } },
   });
+  return user as CallbackUser | null;
 };
