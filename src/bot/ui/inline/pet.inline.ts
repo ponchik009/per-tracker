@@ -1,9 +1,11 @@
+import { bottomNavInlineKeyboard } from "./navigation.inline";
+
 export const petMenuInlineKeyboard = (petId: string) => [
   [{ text: "ℹ️ Основная информация", callback_data: `pet_info:${petId}` }],
   [{ text: "🍽️ Покормить", callback_data: `feed:${petId}` }],
   [{ text: "📝 Записать событие", callback_data: `events:${petId}` }],
   [{ text: "🗑️ Удалить информацию", callback_data: `delete:${petId}` }],
-  [{ text: "⬅️ Назад", callback_data: "home" }],
+  ...bottomNavInlineKeyboard(petId),
 ];
 
 export const petSectionsInlineKeyboard = (petId: string) => [
@@ -12,6 +14,7 @@ export const petSectionsInlineKeyboard = (petId: string) => [
   [{ text: "🍽️ Питание", callback_data: `nut:${petId}` }],
   [{ text: "📋 События", callback_data: `events:${petId}` }],
   [{ text: "⬅️ Назад", callback_data: `pet:${petId}` }],
+  ...bottomNavInlineKeyboard(petId),
 ];
 
 export const petEditMenuInlineKeyboard = (petId: string) => [
@@ -21,13 +24,16 @@ export const petEditMenuInlineKeyboard = (petId: string) => [
   [{ text: "Пол", callback_data: `pet_edit:${petId}:sex` }],
   [{ text: "Стерилизация", callback_data: `pet_edit:${petId}:sterilized` }],
   [{ text: "⬅️ Назад", callback_data: `pet_info:${petId}` }],
+  ...bottomNavInlineKeyboard(petId),
 ];
 
 export const deleteConfirmInlineKeyboard = (petId: string) => [
   [{ text: "Да, удалить", callback_data: `delete_confirm:${petId}` }],
   [{ text: "Нет, отмена", callback_data: `pet:${petId}` }],
+  ...bottomNavInlineKeyboard(petId),
 ];
 
 export const openPetCardInlineKeyboard = (petId: string) => [
   [{ text: "ℹ️ Открыть карточку", callback_data: `pet_info:${petId}` }],
+  ...bottomNavInlineKeyboard(petId),
 ];

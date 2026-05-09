@@ -33,6 +33,13 @@ export const getCustomEventTypes = async (petId: string) => {
   });
 };
 
+export const getCustomEventTypeById = async (id: string) => {
+  return prisma.customEventType.findUnique({
+    where: { id },
+    select: { id: true, petId: true },
+  });
+};
+
 export const getTodayEventSummary = async (petId: string, timezone: string) => {
   const range = getDayRangeByTimezone(timezone);
   const [events, feedings] = await Promise.all([

@@ -1,6 +1,10 @@
 import { PetEventKind } from "@prisma/client";
 
-import { getCustomEventTypes, getTodayEventSummary } from "../../../modules/events/event.service";
+import {
+  getCustomEventTypeById,
+  getCustomEventTypes,
+  getTodayEventSummary,
+} from "../../../modules/events/event.service";
 import { formatDateTimeByTimezone } from "../../../utils/date";
 import { eventsMenuInlineKeyboard } from "../../ui/inline/events.inline";
 import { eventsPeriodsInlineKeyboard } from "../../ui/inline/reports.inline";
@@ -69,13 +73,18 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
     },
   },
   {
-    prefix: "event_pick_custom:",
+    prefix: "epc:",
     handle: async ({ ctx }, data) => {
-      const [, petId, customEventKindId] = data.split(":");
+      const customEventKindId = data.split(":")[1];
+      const customType = await getCustomEventTypeById(customEventKindId);
+      if (!customType) {
+        await ctx.reply("Не удалось найти тип события. Попробуй снова.");
+        return;
+      }
       await ctx.scene.enter("EVENT_COMMENT", {
-        petId,
+        petId: customType.petId,
         kind: "CUSTOM",
-        customEventKindId,
+        customEventKindId: customType.id,
       });
     },
   },

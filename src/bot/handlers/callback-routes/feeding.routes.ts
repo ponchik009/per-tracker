@@ -12,6 +12,7 @@ import {
   openScheduleInlineKeyboard,
   quickFeedInlineKeyboard,
 } from "../../ui/inline/feeding.inline";
+import { openPetCardInlineKeyboard } from "../../ui/inline/pet.inline";
 import { PrefixCallbackRoute } from "./callback-route.types";
 
 export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
@@ -95,7 +96,9 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
 
       const pending = feedingState.pending;
       if (!pending.length) {
-        await ctx.reply("Все плановые кормления на сегодня уже отмечены ✅");
+        await ctx.reply("Все плановые кормления на сегодня уже отмечены ✅", {
+          reply_markup: { inline_keyboard: openPetCardInlineKeyboard(petId) },
+        });
         return;
       }
 
@@ -118,7 +121,9 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
       if (!schedule) {
         return;
       }
-      await ctx.reply("Кормление записано ✅");
+      await ctx.reply("Кормление записано ✅", {
+        reply_markup: { inline_keyboard: openPetCardInlineKeyboard(schedule.feedingConfig.petId) },
+      });
     },
   },
 ];

@@ -1,4 +1,5 @@
 import { PetEventKind } from "@prisma/client";
+import { bottomNavInlineKeyboard } from "./navigation.inline";
 
 export const eventsMenuInlineKeyboard = (
   petId: string,
@@ -9,8 +10,9 @@ export const eventsMenuInlineKeyboard = (
     { text: item.label, callback_data: `event_pick:${petId}:${item.kind}` },
   ]),
   ...customEvents.map((item) => [
-    { text: `🧩 ${item.label}`, callback_data: `event_pick_custom:${petId}:${item.id}` },
+    { text: `🧩 ${item.label}`, callback_data: `epc:${item.id}` },
   ]),
   [{ text: "➕ Добавить свое событие", callback_data: `event_new:${petId}` }],
   [{ text: "📤 Отчеты (XLSX)", callback_data: `events_report_menu:${petId}` }],
+  ...bottomNavInlineKeyboard(petId),
 ];

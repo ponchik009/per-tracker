@@ -54,6 +54,9 @@ export const weightUpdateWizard = new Scenes.WizardScene<Scenes.WizardContext>(
       },
     });
     await ctx.reply("Вес обновлен ✅", Markup.removeKeyboard());
+    await ctx.reply("Что дальше?", {
+      reply_markup: { inline_keyboard: openPetCardInlineKeyboard(state.petId) },
+    });
     await ctx.scene.leave();
   },
 );
