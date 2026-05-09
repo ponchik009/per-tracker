@@ -1,9 +1,11 @@
 import { Markup, Scenes } from "telegraf";
 
-import { createPetFromDraft, listActivePetsByTelegramId } from "../../../modules/pets/pet.service";
+import { createPetFromDraft } from "../../../modules/pets/pet.service";
 import { getOrCreateUser } from "../../../modules/users/user.service";
 import { parseDateDDMMYYYY, parseWeight } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
+import { ensureTextInput } from "../../guards/ensure-text-input.guard";
+import { replyHomeMenu } from "../../handlers/home.handler";
 import { BACK_TEXT, backKeyboard, sexKeyboard, yesNoKeyboard } from "../../ui/keyboards";
 
 interface AddPetState {
@@ -15,26 +17,6 @@ interface AddPetState {
   isSterilized?: boolean;
 }
 
-const sendHomeFromScene = async (ctx: Scenes.WizardContext) => {
-  if (!ctx.from || !ctx.chat) {
-    return;
-  }
-
-  const pets = await listActivePetsByTelegramId(BigInt(ctx.from.id));
-  const buttons = pets.map((pet) => [
-    { text: `🐾 ${pet.name}`, callback_data: `pet:${pet.id}` },
-  ]);
-  buttons.push([{ text: "➕ Добавить питомца", callback_data: "pet:add" }]);
-  buttons.push([
-    { text: "🤝 Поделиться информацией", callback_data: "share:open" },
-  ]);
-
-  await ctx.reply(
-    pets.length ? "Выбери питомца из списка 👇" : "Питомцев пока нет. Добавим первого? 🐱",
-    Markup.inlineKeyboard(buttons),
-  );
-};
-
 export const createPetWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   "CREATE_PET",
 
@@ -44,12 +26,15 @@ export const createPetWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   },
 
   async (ctx) => {
+    if (!(await ensureTextInput(ctx, "Пожалуйста, напиши имя питомца 🐾"))) {
+      return;
+    }
     assertHasText(ctx);
     const text = ctx.message.text.trim();
 
     if (text === BACK_TEXT) {
       await ctx.scene.leave();
-      await sendHomeFromScene(ctx);
+      await replyHomeMenu(ctx);
       return;
     }
 
@@ -62,6 +47,9 @@ export const createPetWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   },
 
   async (ctx) => {
+    if (!(await ensureTextInput(ctx, "Напиши породу текстом или нажми «Пропустить»."))) {
+      return;
+    }
     assertHasText(ctx);
     const text = ctx.message.text.trim();
 
@@ -76,6 +64,9 @@ export const createPetWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   },
 
   async (ctx) => {
+    if (!(await ensureTextInput(ctx, "Введи дату текстом в формате ДД.ММ.ГГГГ."))) {
+      return;
+    }
     assertHasText(ctx);
     const text = ctx.message.text.trim();
 
@@ -99,6 +90,9 @@ export const createPetWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   },
 
   async (ctx) => {
+    if (!(await ensureTextInput(ctx, "Введи вес текстом, например 3.5."))) {
+      return;
+    }
     assertHasText(ctx);
     const text = ctx.message.text.trim();
 
@@ -119,6 +113,9 @@ export const createPetWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   },
 
   async (ctx) => {
+    if (!(await ensureTextInput(ctx, "Выбери пол кнопкой или введи текст."))) {
+      return;
+    }
     assertHasText(ctx);
     const text = ctx.message.text.trim();
 
@@ -138,6 +135,9 @@ export const createPetWizard = new Scenes.WizardScene<Scenes.WizardContext>(
   },
 
   async (ctx) => {
+    if (!(await ensureTextInput(ctx, "Ответь кнопкой: Да или Нет."))) {
+      return;
+    }
     assertHasText(ctx);
     const text = ctx.message.text.trim();
 
@@ -213,6 +213,6 @@ export const createPetWizard = new Scenes.WizardScene<Scenes.WizardContext>(
 
     await ctx.reply(`Питомец ${pet.name} успешно добавлен! 🎉`);
     await ctx.scene.leave();
-    await sendHomeFromScene(ctx);
+    await replyHomeMenu(ctx);
   },
 );
