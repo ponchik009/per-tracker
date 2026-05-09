@@ -65,10 +65,10 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
     },
   },
   {
-    prefix: "nut_sch_del:",
+    prefix: "nsd:",
     handle: async ({ ctx }, data) => {
-      const [, petId, scheduleItemId] = data.split(":");
-      await deleteScheduleItem(scheduleItemId);
+      const scheduleItemId = data.split(":")[1];
+      const petId = await deleteScheduleItem(scheduleItemId);
       await ctx.reply("Слот удален ✅");
       await ctx.reply("Открой раздел расписания снова для просмотра обновлений.", {
         reply_markup: { inline_keyboard: openScheduleInlineKeyboard(petId) },

@@ -81,5 +81,9 @@ export const addScheduleItem = async (petId: string, minutesOfDay: number, feedT
 };
 
 export const deleteScheduleItem = async (scheduleItemId: string) => {
-  await prisma.feedingSchedule.delete({ where: { id: scheduleItemId } });
+  const deleted = await prisma.feedingSchedule.delete({
+    where: { id: scheduleItemId },
+    include: { feedingConfig: true },
+  });
+  return deleted.feedingConfig.petId;
 };

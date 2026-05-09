@@ -15,7 +15,7 @@ export const feedingScheduleInlineKeyboard = (
   const scheduleButtons = scheduleItems.map((item) => [
     {
       text: `🗑️ ${formatMinutesToHHMM(item.minutesOfDay)} • ${item.amount} ${item.feedType === "WET" ? "пач" : "гр"}`,
-      callback_data: `nut_sch_del:${petId}:${item.id}`,
+      callback_data: `nsd:${item.id}`,
     },
   ]);
 
