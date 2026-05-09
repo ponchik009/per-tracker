@@ -5,7 +5,7 @@ import { parseTimeHHMM, parseWeight } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
 import { openScheduleInlineKeyboard } from "../../ui/inline/feeding.inline";
-import { BACK_TEXT, backKeyboard } from "../../ui/keyboards";
+import { BACK_TEXT, backKeyboard } from "../../ui/reply/keyboards";
 
 interface FeedingScheduleState {
   petId: string;

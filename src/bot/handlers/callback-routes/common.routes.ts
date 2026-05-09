@@ -1,12 +1,10 @@
-import { clearSession } from "../../../modules/sessions/session.service";
 import { sendHomeMenu } from "../home.handler";
 import { ExactCallbackRoute } from "./callback-route.types";
 
 export const commonExactRoutes: ExactCallbackRoute[] = [
   {
     key: "pet:add",
-    handle: async ({ ctx, user }) => {
-      await clearSession(user.id);
+    handle: async ({ ctx }) => {
       await ctx.scene.enter("CREATE_PET");
     },
   },
@@ -29,7 +27,6 @@ export const commonExactRoutes: ExactCallbackRoute[] = [
           : "Сначала добавь питомца, потом можно делиться доступом.",
         { parse_mode: "Markdown" },
       );
-      await clearSession(user.id);
       await ctx.scene.enter("SHARE_JOIN");
     },
   },

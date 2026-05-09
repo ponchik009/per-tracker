@@ -5,7 +5,7 @@ import { parseWeight } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
 import { feedingMenuInlineKeyboard } from "../../ui/inline/feeding.inline";
-import { BACK_TEXT, backKeyboard } from "../../ui/keyboards";
+import { BACK_TEXT, backKeyboard } from "../../ui/reply/keyboards";
 
 interface FeedingEditState {
   petId: string;

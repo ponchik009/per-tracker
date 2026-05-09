@@ -11,7 +11,7 @@ import { parseDateDDMMYYYY } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
 import { openPetCardInlineKeyboard } from "../../ui/inline/pet.inline";
-import { BACK_TEXT, backKeyboard, sexKeyboard, yesNoKeyboard } from "../../ui/keyboards";
+import { BACK_TEXT, backKeyboard, sexKeyboard, yesNoKeyboard } from "../../ui/reply/keyboards";
 
 type EditField = "name" | "breed" | "birth_date" | "sex" | "sterilized";
 

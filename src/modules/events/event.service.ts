@@ -26,6 +26,13 @@ export const upsertCustomEventType = async (petId: string, label: string, userId
   });
 };
 
+export const getCustomEventTypes = async (petId: string) => {
+  return prisma.customEventType.findMany({
+    where: { petId },
+    orderBy: { createdAt: "asc" },
+  });
+};
+
 export const getTodayEventSummary = async (petId: string, timezone: string) => {
   const range = getDayRangeByTimezone(timezone);
   const [events, feedings] = await Promise.all([

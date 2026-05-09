@@ -1,4 +1,3 @@
-import { clearSession } from "../../../modules/sessions/session.service";
 import {
   deleteScheduleItem,
   getFeedingConfigWithSchedule,
@@ -27,9 +26,8 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "nut_norm:",
-    handle: async ({ ctx, user }, data) => {
+    handle: async ({ ctx }, data) => {
       const petId = data.split(":")[1];
-      await clearSession(user.id);
       await ctx.scene.enter("FEEDING_EDIT", { petId });
     },
   },
@@ -60,9 +58,8 @@ export const feedingPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "nut_sch_add:",
-    handle: async ({ ctx, user }, data) => {
+    handle: async ({ ctx }, data) => {
       const petId = data.split(":")[1];
-      await clearSession(user.id);
       await ctx.scene.enter("FEEDING_SCHEDULE_ADD", { petId });
     },
   },

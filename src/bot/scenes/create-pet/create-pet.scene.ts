@@ -6,7 +6,7 @@ import { parseDateDDMMYYYY, parseWeight } from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
 import { replyHomeMenu } from "../../handlers/home.handler";
-import { BACK_TEXT, backKeyboard, sexKeyboard, yesNoKeyboard } from "../../ui/keyboards";
+import { BACK_TEXT, backKeyboard, sexKeyboard, yesNoKeyboard } from "../../ui/reply/keyboards";
 
 interface AddPetState {
   name?: string;

@@ -1,12 +1,14 @@
 import { Input, Markup, Scenes } from "telegraf";
-import dayjs from "dayjs";
 
 import { prisma } from "../../../prisma";
 import { buildEventsReport, buildWeightReport } from "../../../services/reports";
-import { parseDateDDMMYYYY } from "../../../utils/date";
+import {
+  formatDateTimeByTimezone,
+  getDayRangeForDateInTimezone,
+} from "../../../utils/date";
 import { assertHasText } from "../../asserts/has-text.assert";
 import { ensureTextInput } from "../../guards/ensure-text-input.guard";
-import { BACK_TEXT, backKeyboard } from "../../ui/keyboards";
+import { BACK_TEXT, backKeyboard } from "../../ui/reply/keyboards";
 
 interface ReportCustomDateState {
   petId: string;
@@ -48,23 +50,31 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
       return;
     }
 
-    const date = parseDateDDMMYYYY(text);
-    if (!date) {
+    if (!ctx.from) {
+      await ctx.reply("Не удалось определить пользователя.");
+      await ctx.scene.leave();
+      return;
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { telegramId: BigInt(ctx.from.id) },
+      select: { timezone: true },
+    });
+    const timezone = currentUser?.timezone ?? "UTC";
+    const range = getDayRangeForDateInTimezone(text, timezone);
+    if (!range) {
       await ctx.reply("Неверный формат даты. Пример: 15.05.2024");
       return;
     }
 
-    const start = dayjs(date).startOf("day").toDate();
-    const end = dayjs(date).endOf("day").toDate();
-
     if (state.reportKind === "weight") {
       const logs = await prisma.weightLog.findMany({
-        where: { petId: state.petId, createdAt: { gte: start, lte: end } },
+        where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
         orderBy: { createdAt: "asc" },
       });
       const report = buildWeightReport(
         logs.map((x) => ({
-          date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
+          date: formatDateTimeByTimezone(x.createdAt, timezone),
           weightKg: x.weightKg,
         })),
       );
@@ -78,16 +88,16 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
 
       const [weights, events, feedings] = await Promise.all([
         prisma.weightLog.findMany({
-          where: { petId: state.petId, createdAt: { gte: start, lte: end } },
+          where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
           orderBy: { createdAt: "asc" },
         }),
         prisma.petEvent.findMany({
-          where: { petId: state.petId, createdAt: { gte: start, lte: end } },
+          where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
           include: { customEventType: true },
           orderBy: { createdAt: "asc" },
         }),
         prisma.feedingLog.findMany({
-          where: { petId: state.petId, createdAt: { gte: start, lte: end } },
+          where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
           orderBy: { createdAt: "asc" },
         }),
       ]);
@@ -95,11 +105,11 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
       const report = buildEventsReport(
         pet.name,
         weights.map((x) => ({
-          date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
+          date: formatDateTimeByTimezone(x.createdAt, timezone),
           weightKg: x.weightKg,
         })),
         events.map((x) => ({
-          date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
+          date: formatDateTimeByTimezone(x.createdAt, timezone),
           type:
             x.kind === "CUSTOM"
               ? (x.customEventType?.label ?? "Другое")
@@ -107,10 +117,11 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
           comment: x.comment ?? "",
         })),
         feedings.map((x) => ({
-          date: dayjs(x.createdAt).format("DD.MM.YYYY HH:mm"),
+          date: formatDateTimeByTimezone(x.createdAt, timezone),
           type: "Кормление",
           comment: [x.feedType, x.amount].filter(Boolean).join(" "),
         })),
+        timezone,
       );
       await ctx.replyWithDocument(
         Input.fromBuffer(report, `events_${pet.name}_custom_date.xlsx`),

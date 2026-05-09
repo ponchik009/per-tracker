@@ -1,6 +1,5 @@
 import { prisma } from "../../../prisma";
 import { softDeletePet } from "../../../modules/pets/pet.service";
-import { clearSession, upsertSession } from "../../../modules/sessions/session.service";
 import { deleteConfirmInlineKeyboard } from "../../ui/inline/pet.inline";
 import { weightActionsInlineKeyboard } from "../../ui/inline/reports.inline";
 import { sendHomeMenu } from "../home.handler";
@@ -10,9 +9,8 @@ import { PrefixCallbackRoute } from "./callback-route.types";
 export const petPrefixRoutes: PrefixCallbackRoute[] = [
   {
     prefix: "pet:",
-    handle: async ({ ctx, user }, data) => {
+    handle: async ({ ctx }, data) => {
       const petId = data.split(":")[1];
-      await upsertSession(user.id, "pet_menu", "selected", { selectedPetId: petId });
       await replyPetMenu(ctx, petId);
     },
   },
@@ -30,9 +28,8 @@ export const petPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "pet_edit:",
-    handle: async ({ ctx, user }, data) => {
+    handle: async ({ ctx }, data) => {
       const [, petId, field] = data.split(":");
-      await clearSession(user.id);
       await ctx.scene.enter("PET_EDIT", { petId, field });
     },
   },
@@ -54,9 +51,8 @@ export const petPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "weight_edit:",
-    handle: async ({ ctx, user }, data) => {
+    handle: async ({ ctx }, data) => {
       const petId = data.split(":")[1];
-      await clearSession(user.id);
       await ctx.scene.enter("WEIGHT_UPDATE", { petId });
     },
   },

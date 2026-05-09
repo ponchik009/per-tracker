@@ -28,16 +28,9 @@ export const isUserExists = async (telegramId: bigint) =>
     .count({ where: { telegramId } })
     .then((numberOfUsers) => numberOfUsers > 0);
 
-export const getUserWithSession = async (telegramId: bigint) => {
-  return prisma.user.findUnique({
-    where: { telegramId },
-    include: { sessions: true },
-  });
-};
-
 export const getUserWithPets = async (telegramId: bigint) => {
   return prisma.user.findUnique({
     where: { telegramId },
-    include: { pets: { include: { pet: true } }, sessions: true },
+    include: { pets: { include: { pet: true } } },
   });
 };

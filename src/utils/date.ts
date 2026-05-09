@@ -13,6 +13,19 @@ export const parseDateDDMMYYYY = (input: string): Date | null => {
   return parsed.isValid() ? parsed.toDate() : null;
 };
 
+export const getDayRangeForDateInTimezone = (dateInput: string, timezoneName: string) => {
+  const cleaned = dateInput.trim();
+  const strictParsed = dayjs(cleaned, "DD.MM.YYYY", true);
+  if (!strictParsed.isValid()) {
+    return null;
+  }
+  const zoned = dayjs.tz(`${cleaned} 00:00`, "DD.MM.YYYY HH:mm", timezoneName);
+  return {
+    start: zoned.startOf("day").utc().toDate(),
+    end: zoned.endOf("day").utc().toDate(),
+  };
+};
+
 export const parseWeight = (input: string): number | null => {
   const normalized = input.replace(",", ".").replace(/[^\d.]/g, "").trim();
   const value = Number(normalized);
@@ -57,4 +70,22 @@ export const getLocalNow = (timezoneName: string, date = new Date()) => dayjs(da
 export const getCurrentMinutesByTimezone = (timezoneName: string, date = new Date()) => {
   const zoned = getLocalNow(timezoneName, date);
   return zoned.hour() * 60 + zoned.minute();
+};
+
+export const formatDateTimeByTimezone = (
+  date: Date,
+  timezoneName: string,
+  format = "DD.MM.YYYY HH:mm",
+) => dayjs(date).tz(timezoneName).format(format);
+
+export const getPastRangeByTimezone = (
+  timezoneName: string,
+  unit: "week" | "month" | "year",
+  date = new Date(),
+) => {
+  const zonedNow = dayjs(date).tz(timezoneName);
+  return {
+    start: zonedNow.subtract(1, unit).utc().toDate(),
+    end: zonedNow.utc().toDate(),
+  };
 };

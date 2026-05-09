@@ -1,8 +1,7 @@
-import dayjs from "dayjs";
 import { PetEventKind } from "@prisma/client";
 
-import { clearSession } from "../../../modules/sessions/session.service";
-import { getTodayEventSummary } from "../../../modules/events/event.service";
+import { getCustomEventTypes, getTodayEventSummary } from "../../../modules/events/event.service";
+import { formatDateTimeByTimezone } from "../../../utils/date";
 import { eventsMenuInlineKeyboard } from "../../ui/inline/events.inline";
 import { eventsPeriodsInlineKeyboard } from "../../ui/inline/reports.inline";
 import { PrefixCallbackRoute } from "./callback-route.types";
@@ -28,7 +27,10 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
     prefix: "events:",
     handle: async ({ ctx, user }, data) => {
       const petId = data.split(":")[1];
-      const today = await getTodayEventSummary(petId, user.timezone);
+      const [today, customEvents] = await Promise.all([
+        getTodayEventSummary(petId, user.timezone),
+        getCustomEventTypes(petId),
+      ]);
       const eventsText = today.events.length
         ? today.events
             .map((event) => {
@@ -36,30 +38,45 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
                 event.kind === "CUSTOM"
                   ? (event.customEventType?.label ?? "Другое")
                   : eventLabels[event.kind];
-              return `• ${dayjs(event.createdAt).format("HH:mm")} — ${label}${event.comment ? ` (${event.comment})` : ""}`;
+              return `• ${formatDateTimeByTimezone(event.createdAt, user.timezone, "HH:mm")} — ${label}${event.comment ? ` (${event.comment})` : ""}`;
             })
             .join("\n")
         : "Сегодня событий пока нет.";
 
       await ctx.reply(`Сводка за сегодня:\nКормления: ${today.feedings}\n${eventsText}`);
       await ctx.reply("Выбери событие или добавь новое:", {
-        reply_markup: { inline_keyboard: eventsMenuInlineKeyboard(petId, defaultEvents) },
+        reply_markup: {
+          inline_keyboard: eventsMenuInlineKeyboard(
+            petId,
+            defaultEvents,
+            customEvents.map((x) => ({ id: x.id, label: x.label })),
+          ),
+        },
       });
     },
   },
   {
     prefix: "event_pick:",
-    handle: async ({ ctx, user }, data) => {
+    handle: async ({ ctx }, data) => {
       const [, petId, kind] = data.split(":");
-      await clearSession(user.id);
       await ctx.scene.enter("EVENT_COMMENT", { petId, kind });
     },
   },
   {
     prefix: "event_new:",
-    handle: async ({ ctx, user }, data) => {
-      await clearSession(user.id);
+    handle: async ({ ctx }, data) => {
       await ctx.scene.enter("EVENT_NEW", { petId: data.split(":")[1] });
+    },
+  },
+  {
+    prefix: "event_pick_custom:",
+    handle: async ({ ctx }, data) => {
+      const [, petId, customEventKindId] = data.split(":");
+      await ctx.scene.enter("EVENT_COMMENT", {
+        petId,
+        kind: "CUSTOM",
+        customEventKindId,
+      });
     },
   },
   {
@@ -73,9 +90,8 @@ export const eventsPrefixRoutes: PrefixCallbackRoute[] = [
   },
   {
     prefix: "events_report_custom:",
-    handle: async ({ ctx, user }, data) => {
+    handle: async ({ ctx }, data) => {
       const petId = data.split(":")[1];
-      await clearSession(user.id);
       await ctx.scene.enter("REPORT_CUSTOM_DATE", { petId, reportKind: "events" });
     },
   },
