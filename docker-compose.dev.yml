@@ -3,9 +3,10 @@ services:
     image: ${GHCR_IMAGE}:${IMAGE_TAG:-dev-latest}
     container_name: pet_tracker_bot_dev
     restart: unless-stopped
+    # На сервере .env создаётся из GitHub Secret (см. deploy.yml); файла .env.dev в репозитории/на VPS нет.
+    # Локально: либо один .env, либо объедините значения из .env + .env.dev в .env перед compose up.
     env_file:
       - .env
-      - .env.dev
     depends_on:
       postgres:
         condition: service_healthy
