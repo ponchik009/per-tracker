@@ -1,0 +1,39 @@
+services:
+  bot:
+    image: ${GHCR_IMAGE}:${IMAGE_TAG:-dev-latest}
+    container_name: pet_tracker_bot_dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - pet_tracker_dev_network
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pet_tracker_postgres_dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - pet_tracker_dev_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  pet_tracker_dev_network:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:

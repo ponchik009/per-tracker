@@ -2,7 +2,7 @@ name: Build and Deploy
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "dev"]
   workflow_dispatch:
 
 env:
@@ -40,6 +40,11 @@ jobs:
         run: |
           echo "ghcr-image=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}" >> "$GITHUB_OUTPUT"
           echo "image-tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_name }}" = "dev" ]; then
+            echo "image-latest-tag=dev-latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "image-latest-tag=latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -58,7 +63,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.meta.outputs.ghcr-image }}:${{ steps.meta.outputs.image-tag }}
-            ${{ steps.meta.outputs.ghcr-image }}:latest
+            ${{ steps.meta.outputs.ghcr-image }}:${{ steps.meta.outputs.image-latest-tag }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -73,8 +78,8 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "docker-compose.prod.yml,deploy/vps-deploy.sh"
-          target: "~/pet-tracker"
+          source: "docker-compose.prod.yml,docker-compose.dev.yml,deploy/vps-deploy.sh"
+          target: "${{ github.ref_name == 'dev' && '~/pet-tracker-dev' || '~/pet-tracker' }}"
 
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.0.3
@@ -84,10 +89,21 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -eu
-            cd ~/pet-tracker
+            if [ "${{ github.ref_name }}" = "dev" ]; then
+              APP_DIR=~/pet-tracker-dev
+              ENV_FILE_CONTENT='${{ secrets.DEV_ENV_FILE }}'
+              COMPOSE_FILE=docker-compose.dev.yml
+            else
+              APP_DIR=~/pet-tracker
+              ENV_FILE_CONTENT='${{ secrets.PROD_ENV_FILE }}'
+              COMPOSE_FILE=docker-compose.prod.yml
+            fi
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
             chmod +x deploy/vps-deploy.sh
-            printf '%s\n' "${{ secrets.PROD_ENV_FILE }}" > .env
+            printf '%s\n' "$ENV_FILE_CONTENT" > .env
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             export GHCR_IMAGE=${{ needs.build-and-push.outputs.ghcr-image }}
             export IMAGE_TAG=${{ needs.build-and-push.outputs.image-tag }}
+            export COMPOSE_FILE
             ./deploy/vps-deploy.sh

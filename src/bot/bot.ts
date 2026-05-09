@@ -1,4 +1,4 @@
-import { Input, Telegraf } from "telegraf";
+import { Input, Scenes, session, Telegraf } from "telegraf";
 import { PetEventKind, Prisma } from "@prisma/client";
 import dayjs from "dayjs";
 
@@ -53,6 +53,7 @@ import {
   parseTimeHHMM,
   parseWeight,
 } from "../utils/date";
+import { createPetWizard } from "./scenes/create-pet/create-pet.scene";
 
 type SessionPayload = {
   petDraft?: {
@@ -108,7 +109,11 @@ export const createBot = () => {
     return { start: from, end: new Date() };
   };
 
-  const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
+  const bot = new Telegraf<Scenes.WizardContext>(config.TELEGRAM_BOT_TOKEN);
+
+  bot.use(session());
+  const stage = new Scenes.Stage([createPetWizard]);
+  bot.use(stage.middleware());
 
   const sendHome = async (telegramId: bigint, chatId: number) => {
     const pets = await listActivePetsByTelegramId(telegramId);
@@ -330,8 +335,8 @@ export const createBot = () => {
           await ctx.reply("Не нашел такой код. Можно продолжить без него.");
         }
       }
-      await upsertSession(user.id, "pet_create", "name", {});
-      await ctx.reply("Как зовут твою кошку? 😺", backKeyboard());
+      await clearSession(user.id);
+      await ctx.scene.enter("CREATE_PET");
       return;
     }
 
@@ -860,8 +865,8 @@ export const createBot = () => {
     await ctx.answerCbQuery();
 
     if (data === "pet:add") {
-      await upsertSession(user.id, "pet_create", "name", {});
-      await ctx.reply("Как зовут твою кошку? 😺", backKeyboard());
+      await clearSession(user.id);
+      await ctx.scene.enter("CREATE_PET");
       return;
     }
 
@@ -912,6 +917,11 @@ export const createBot = () => {
       await upsertSession(user.id, "share", "join_code", {});
       await ctx.reply(
         "Или отправь мне код, чтобы подключиться к другому питомцу.",
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: "⬅️ Назад", callback_data: `home` }]],
+          },
+        },
       );
       return;
     }

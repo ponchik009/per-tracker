@@ -6,5 +6,7 @@ if [ -z "${GHCR_IMAGE:-}" ] || [ -z "${IMAGE_TAG:-}" ]; then
   exit 1
 fi
 
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d --remove-orphans
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+
+docker compose -f "$COMPOSE_FILE" pull
+docker compose -f "$COMPOSE_FILE" up -d --remove-orphans

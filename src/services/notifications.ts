@@ -5,7 +5,7 @@ import { NotificationType } from "@prisma/client";
 import { getCurrentMinutesByTimezone, getDayRangeByTimezone, getLocalNow, getWeekRangeByTimezone } from "../utils/date";
 import { prisma } from "../prisma";
 
-export const startNotifications = (bot: Telegraf) => {
+export const startNotifications = (bot: Telegraf<any>) => {
   cron.schedule("*/15 * * * *", async () => {
     const users = await prisma.user.findMany({
       include: { pets: { include: { pet: { include: { feedingConfig: { include: { scheduleItems: true } } } } } } },
