@@ -67,6 +67,8 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
       return;
     }
 
+    const periodLabel = `${formatDateTimeByTimezone(range.start, timezone)} — ${formatDateTimeByTimezone(range.end, timezone)}`;
+
     if (state.reportKind === "weight") {
       const logs = await prisma.weightLog.findMany({
         where: { petId: state.petId, createdAt: { gte: range.start, lte: range.end } },
@@ -119,9 +121,10 @@ export const reportCustomDateWizard = new Scenes.WizardScene<Scenes.WizardContex
         feedings.map((x) => ({
           date: formatDateTimeByTimezone(x.createdAt, timezone),
           type: "Кормление",
-          comment: [x.feedType, x.amount].filter(Boolean).join(" "),
+          comment: [x.feedType, x.amount, x.note].filter((v) => v !== null && v !== undefined && v !== "").join(" "),
         })),
         timezone,
+        periodLabel,
       );
       await ctx.replyWithDocument(
         Input.fromBuffer(report, `events_${pet.name}_custom_date.xlsx`),

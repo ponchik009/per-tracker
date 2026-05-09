@@ -29,7 +29,7 @@ export const getDayRangeForDateInTimezone = (dateInput: string, timezoneName: st
 export const parseWeight = (input: string): number | null => {
   const normalized = input.replace(",", ".").replace(/[^\d.]/g, "").trim();
   const value = Number(normalized);
-  if (Number.isNaN(value) || value <= 0 || value > 25) {
+  if (Number.isNaN(value) || value <= 0) {
     return null;
   }
   return value;

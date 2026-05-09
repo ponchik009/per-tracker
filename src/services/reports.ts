@@ -11,13 +11,21 @@ type EventRow = {
   comment: string;
 };
 
+const appendSheetFromAoa = (
+  wb: XLSX.WorkBook,
+  name: string,
+  aoa: (string | number)[][],
+) => {
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+};
+
 export const buildWeightReport = (rows: WeightRow[]): Buffer => {
   const wb = XLSX.utils.book_new();
-  const sheet = XLSX.utils.json_to_sheet(rows, {
-    header: ["date", "weightKg"],
-  });
-  XLSX.utils.sheet_add_aoa(sheet, [["Дата", "Вес (кг)"]], { origin: "A1" });
-  XLSX.utils.book_append_sheet(wb, sheet, "Вес");
+  const aoa: (string | number)[][] = [["Дата и время", "Вес (кг)"]];
+  for (const row of rows) {
+    aoa.push([row.date, row.weightKg]);
+  }
+  appendSheetFromAoa(wb, "Вес", aoa);
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 };
 
@@ -27,28 +35,68 @@ export const buildEventsReport = (
   events: EventRow[],
   feedings: EventRow[],
   timezone: string,
+  periodLabel: string,
 ): Buffer => {
   const wb = XLSX.utils.book_new();
-  const summarySheet = XLSX.utils.aoa_to_sheet([
+
+  const summaryAoa: (string | number)[][] = [
     ["Питомец", petName],
     ["Сгенерировано", new Date().toLocaleString("ru-RU", { timeZone: timezone })],
     ["Таймзона", timezone],
+    ["Период", periodLabel],
+    [],
+    ["События (журнал PetEvent, как в боте)", "", ""],
+    ["Дата и время", "Тип", "Комментарий"],
+  ];
+
+  if (events.length) {
+    for (const e of events) {
+      summaryAoa.push([e.date, e.type, e.comment]);
+    }
+  } else {
+    summaryAoa.push(["— за этот период записей нет —", "", ""]);
+  }
+
+  summaryAoa.push([]);
+  summaryAoa.push(["Кормления по расписанию / порции (FeedingLog)", "", ""]);
+  summaryAoa.push(["Дата и время", "Тип", "Детали"]);
+
+  if (feedings.length) {
+    for (const f of feedings) {
+      summaryAoa.push([f.date, f.type, f.comment]);
+    }
+  } else {
+    summaryAoa.push(["— за этот период записей нет —", "", ""]);
+  }
+
+  summaryAoa.push([]);
+  summaryAoa.push(["Вес (WeightLog)", "", ""]);
+  summaryAoa.push(["Дата и время", "Вес (кг)", ""]);
+
+  if (weights.length) {
+    for (const w of weights) {
+      summaryAoa.push([w.date, w.weightKg, ""]);
+    }
+  } else {
+    summaryAoa.push(["— за этот период записей нет —", "", ""]);
+  }
+
+  appendSheetFromAoa(wb, "Сводка", summaryAoa);
+
+  appendSheetFromAoa(wb, "События", [
+    ["Дата и время", "Тип", "Комментарий"],
+    ...events.map((e) => [e.date, e.type, e.comment]),
   ]);
-  const weightsSheet = XLSX.utils.json_to_sheet(weights, {
-    header: ["date", "weightKg"],
-  });
-  XLSX.utils.sheet_add_aoa(weightsSheet, [["Дата", "Вес (кг)"]], { origin: "A1" });
-  const eventsSheet = XLSX.utils.json_to_sheet(events, {
-    header: ["date", "type", "comment"],
-  });
-  XLSX.utils.sheet_add_aoa(eventsSheet, [["Дата", "Тип", "Комментарий"]], { origin: "A1" });
-  const feedingSheet = XLSX.utils.json_to_sheet(feedings, {
-    header: ["date", "type", "comment"],
-  });
-  XLSX.utils.sheet_add_aoa(feedingSheet, [["Дата", "Тип", "Комментарий"]], { origin: "A1" });
-  XLSX.utils.book_append_sheet(wb, summarySheet, "Сводка");
-  XLSX.utils.book_append_sheet(wb, weightsSheet, "Вес");
-  XLSX.utils.book_append_sheet(wb, eventsSheet, "События");
-  XLSX.utils.book_append_sheet(wb, feedingSheet, "Кормления");
+
+  appendSheetFromAoa(wb, "Кормления", [
+    ["Дата и время", "Тип", "Детали"],
+    ...feedings.map((f) => [f.date, f.type, f.comment]),
+  ]);
+
+  appendSheetFromAoa(wb, "Вес", [
+    ["Дата и время", "Вес (кг)"],
+    ...weights.map((w) => [w.date, w.weightKg]),
+  ]);
+
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 };

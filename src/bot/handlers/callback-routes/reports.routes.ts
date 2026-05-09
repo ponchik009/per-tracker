@@ -65,6 +65,7 @@ export const reportsPrefixRoutes: PrefixCallbackRoute[] = [
       }
 
       const range = getPastRangeByTimezone(user.timezone, period);
+      const periodLabel = `${formatDateTimeByTimezone(range.start, user.timezone)} — ${formatDateTimeByTimezone(range.end, user.timezone)}`;
       const [weights, events, feedings] = await Promise.all([
         prisma.weightLog.findMany({
           where: { petId, createdAt: { gte: range.start, lte: range.end } },
@@ -98,9 +99,10 @@ export const reportsPrefixRoutes: PrefixCallbackRoute[] = [
         feedings.map((x) => ({
           date: formatDateTimeByTimezone(x.createdAt, user.timezone),
           type: "Кормление",
-          comment: [x.feedType, x.amount].filter(Boolean).join(" "),
+          comment: [x.feedType, x.amount, x.note].filter((v) => v !== null && v !== undefined && v !== "").join(" "),
         })),
         user.timezone,
+        periodLabel,
       );
       await ctx.replyWithDocument(Input.fromBuffer(report, `events_${pet.name}_${period}.xlsx`));
     },
